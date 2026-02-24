@@ -1,0 +1,171 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+/* Siestai Dark Theme - Cyan accent */
+:root {
+  /* Base - Near black backgrounds */
+  --background: #0a0a0b;
+  --foreground: #fafafa;
+
+  /* Surfaces */
+  --card: #141416;
+  --card-foreground: #fafafa;
+  --popover: #1c1c1f;
+  --popover-foreground: #fafafa;
+
+  /* Brand - Cyan accent */
+  --primary: #22d3ee;
+  --primary-foreground: #0a0a0b;
+
+  /* Secondary surfaces */
+  --secondary: #1c1c1f;
+  --secondary-foreground: #fafafa;
+
+  /* Muted text */
+  --muted: #1c1c1f;
+  --muted-foreground: #6b6b70;
+
+  /* Accent */
+  --accent: #0e7490;
+  --accent-foreground: #fafafa;
+
+  /* Semantic colors */
+  --destructive: #ef4444;
+  --success: #22c55e;
+  --warning: #f59e0b;
+
+  /* Borders */
+  --border: #2a2a2d;
+  --border-strong: #3a3a3d;
+  --input: #2a2a2d;
+  --ring: #22d3ee;
+
+  /* Agent gradient colors */
+  --agent-gradient-start: #22d3ee;
+  --agent-gradient-end: #a855f7;
+
+  /* Charts */
+  --chart-1: #22d3ee;
+  --chart-2: #06b6d4;
+  --chart-3: #0e7490;
+  --chart-4: #a855f7;
+  --chart-5: #22c55e;
+
+  --radius: 0.5rem;
+
+  --sidebar: #141416;
+  --sidebar-foreground: #fafafa;
+  --sidebar-primary: #22d3ee;
+  --sidebar-primary-foreground: #0a0a0b;
+  --sidebar-accent: #1c1c1f;
+  --sidebar-accent-foreground: #fafafa;
+  --sidebar-border: #2a2a2d;
+  --sidebar-ring: #22d3ee;
+}
+
+@theme inline {
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-agent-gradient-start: var(--agent-gradient-start);
+  --color-agent-gradient-end: var(--agent-gradient-end);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 12px);
+  --radius-4xl: calc(var(--radius) + 16px);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/* Agent pulse animation */
+@keyframes agent-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.7; transform: scale(1.05); }
+}
+
+.animate-agent-pulse {
+  animation: agent-pulse 2s ease-in-out infinite;
+}
+
+/* Connection pulse animation */
+@keyframes connection-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.animate-connection-pulse {
+  animation: connection-pulse 1.5s ease-in-out infinite;
+}
+
+/* Shimmer loading animation */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.animate-shimmer {
+  background: linear-gradient(90deg, var(--card) 25%, var(--secondary) 50%, var(--card) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+/* Message slide animations */
+@keyframes message-slide-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-message-in {
+  animation: message-slide-in 0.25s ease-out both;
+}
+
+/* Agent gradient */
+.agent-gradient {
+  background: linear-gradient(135deg, var(--agent-gradient-start), var(--agent-gradient-end));
+}
