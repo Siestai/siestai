@@ -124,7 +124,55 @@ Create `records/tasks/{NUMBER}-{slug}.json`. Analyze the plan and produce concre
 
 **How many tasks:** 5-25 depending on scope. Each task = one logical change. Err toward more granular.
 
-### Step 7: Writing Rules
+### Step 7: Add E2E Verification Tasks (When Needed)
+
+After generating implementation tasks, decide whether the plan needs **e2e verification tasks** using `agent-browser`. These tasks open the app in a real browser, walk through user flows, and capture screenshots as proof.
+
+**When to add e2e tasks:**
+- New pages, routes, or navigation changes — user can reach them
+- Forms, modals, dropdowns, or any interactive component — user can operate them
+- Auth flows, onboarding, or multi-step wizards — critical paths users depend on
+- Layout or styling changes — visual regressions are only caught visually
+- API integration that changes what users see — data actually renders correctly
+
+**When to skip:**
+- Pure backend/config/type changes with no user-facing effect
+- Internal refactors that don't change behavior
+- Adding utilities, helpers, or libraries not yet consumed by UI
+
+**E2e task rules:**
+- Place in the **final phase** (all code must be built first)
+- Screenshots go to `screenshots/{NUMBER}-{slug}/`
+- Name files descriptively: `{page}-{state}.png` (e.g., `arena-empty.png`, `settings-form-filled.png`)
+- One task per page or flow — don't cram unrelated pages into one task
+- Steps must use `agent-browser` commands: `open`, `wait`, `snapshot -i`, `click`, `fill`, `screenshot`, `close`
+- Verify by checking screenshot files exist
+
+**Short agent-browser guide for e2e steps:**
+```bash
+# 1. Navigate and wait
+agent-browser open http://localhost:3000/page && agent-browser wait --load networkidle
+
+# 2. Capture default state
+agent-browser screenshot --full screenshots/{slug}/page-default.png
+
+# 3. Discover interactive elements
+agent-browser snapshot -i
+# Output: @e1 [button] "Create", @e2 [input] "Search", ...
+
+# 4. Interact using refs
+agent-browser click @e1                      # click
+agent-browser fill @e2 "search term"         # fill input
+agent-browser wait --load networkidle        # wait after action
+
+# 5. Capture resulting state
+agent-browser screenshot screenshots/{slug}/page-after-action.png
+
+# 6. Always close when done
+agent-browser close
+```
+
+### Step 8: Writing Rules
 
 1. **Be concrete.** Reference actual files, functions, and endpoints from the codebase exploration.
 2. **State decisions.** "Use Zustand" not "We could use Zustand or Redux."
@@ -132,7 +180,7 @@ Create `records/tasks/{NUMBER}-{slug}.json`. Analyze the plan and produce concre
 4. **Keep the plan scannable.** A developer should grasp the full picture in under 2 minutes.
 5. **Include gotchas.** Known pitfalls prevent first-pass failures. One good gotcha saves an entire failed cycle.
 
-### Step 8: Present Summary and Ask to Implement
+### Step 9: Present Summary and Ask to Implement
 
 Show a summary:
 
@@ -149,6 +197,7 @@ Show a summary:
 ### Phases
 - Phase 1: {description} ({N} tasks)
 - Phase 2: {description} ({N} tasks)
+- Phase N: E2E verification ({N} tasks, screenshots → `screenshots/{slug}/`)  ← if applicable
 ```
 
 Then use `AskUserQuestion`:
