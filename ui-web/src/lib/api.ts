@@ -11,7 +11,7 @@ import type {
   HealthResponse,
 } from "./types";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4200";
 
 // Mock agents data
 const MOCK_AGENTS: Agent[] = [
@@ -243,6 +243,7 @@ class ApiClient {
   getAgentName(agentId: string): string {
     return MOCK_AGENTS.find((a) => a.id === agentId)?.name || "Unknown Agent";
   }
+
 }
 
 export const api = new ApiClient();

@@ -77,6 +77,38 @@ export interface ApiError {
   detail: string;
 }
 
+// LiveKit types
+export type LiveConnectionState =
+  | "idle"
+  | "connecting"
+  | "connected"
+  | "reconnecting"
+  | "disconnected"
+  | "failed";
+
+export interface TranscriptMessage {
+  id: string;
+  sender: "user" | "agent";
+  text: string;
+  isFinal: boolean;
+  timestamp: number;
+}
+
+export type AgentState =
+  | "connecting"
+  | "initializing"
+  | "listening"
+  | "thinking"
+  | "speaking";
+
+export interface LiveSessionState {
+  roomName: string;
+  token: string;
+  serverUrl: string;
+  agentName?: string;
+  startedAt: number;
+}
+
 // Constants
 export const AGENT_CATEGORIES = [
   { value: "conversational", label: "Conversational" },
