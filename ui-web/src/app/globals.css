@@ -165,6 +165,46 @@
   animation: message-slide-in 0.25s ease-out both;
 }
 
+/* Speaking pulse animation — agent state indicator */
+@keyframes speaking-pulse {
+  0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4); }
+  50% { transform: scale(1.1); box-shadow: 0 0 0 8px rgba(34, 197, 94, 0); }
+}
+
+.animate-speaking-pulse {
+  animation: speaking-pulse 1.5s ease-in-out infinite;
+}
+
+/* Thinking dots animation — typing indicator */
+@keyframes thinking-dots {
+  0%, 80%, 100% { transform: translateY(0); }
+  40% { transform: translateY(-6px); }
+}
+
+.animate-thinking-dot {
+  animation: thinking-dots 1.4s ease-in-out infinite;
+}
+
+/* Sidebar slide-in animation — transcript panel */
+@keyframes sidebar-slide-in {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+
+.animate-sidebar-in {
+  animation: sidebar-slide-in 0.3s ease-out;
+}
+
+/* Fade + scale in animation — connection state transitions */
+@keyframes fade-scale-in {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.animate-fade-scale-in {
+  animation: fade-scale-in 0.3s ease-out;
+}
+
 /* Agent gradient */
 .agent-gradient {
   background: linear-gradient(135deg, var(--agent-gradient-start), var(--agent-gradient-end));

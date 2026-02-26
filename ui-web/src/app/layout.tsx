@@ -3,6 +3,7 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { NavBar } from "@/components/layout/nav-bar";
 import { StatusBar } from "@/components/layout/status-bar";
+import { LiveSessionProvider } from "@/lib/live-session-context";
 import "./globals.css";
 
 const geist = Geist({ subsets: ["latin"], variable: "--font-geist-sans" });
@@ -33,11 +34,13 @@ export default function RootLayout({
       <body
         className={`${geist.variable} ${geistMono.variable} font-sans antialiased min-h-screen bg-background`}
       >
-        <div className="flex min-h-screen flex-col">
-          <NavBar />
-          <main className="flex-1 pb-10">{children}</main>
-          <StatusBar />
-        </div>
+        <LiveSessionProvider>
+          <div className="flex min-h-screen flex-col">
+            <NavBar />
+            <main className="flex-1 pb-10">{children}</main>
+            <StatusBar />
+          </div>
+        </LiveSessionProvider>
       </body>
     </html>
   );
