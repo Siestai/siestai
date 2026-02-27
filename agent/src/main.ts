@@ -5,10 +5,24 @@ import { BackgroundVoiceCancellation } from '@livekit/noise-cancellation-node';
 import { fileURLToPath } from 'node:url';
 import dotenv from 'dotenv';
 import { Agent } from './agent.js';
+import { ArenaAgent, ArenaMetadata, buildArenaGreeting } from './arena-agent.js';
 
 dotenv.config({ path: '.env.local' });
 
 const isDev = process.argv.includes('dev');
+
+function parseArenaMetadata(raw: string | undefined): ArenaMetadata | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    if (parsed?.type === 'arena' && Array.isArray(parsed.agents)) {
+      return parsed as ArenaMetadata;
+    }
+  } catch {
+    // Not JSON or not arena metadata — fall through to default agent
+  }
+  return null;
+}
 
 export default defineAgent({
   prewarm: async (proc) => {
@@ -18,6 +32,17 @@ export default defineAgent({
     const logger = log();
     const roomName = ctx.room.name;
     const participantIdentity = ctx.room.localParticipant?.identity ?? 'unknown';
+
+    await ctx.connect();
+
+    const arenaMetadata = parseArenaMetadata(ctx.room.metadata);
+    const agent = arenaMetadata ? new ArenaAgent(arenaMetadata) : new Agent();
+
+    if (arenaMetadata) {
+      logger.info(
+        `Arena session [room=${roomName}, personas=${arenaMetadata.agents.map((a) => a.name).join(',')}]`,
+      );
+    }
 
     const session = new voice.AgentSession({
       stt: new inference.STT({ model: 'deepgram/nova-3', language: 'multi' }),
@@ -47,12 +72,10 @@ export default defineAgent({
 
     try {
       await session.start({
-        agent: new Agent(),
+        agent,
         room: ctx.room,
         inputOptions: { noiseCancellation: BackgroundVoiceCancellation() },
       });
-
-      await ctx.connect();
     } catch (error) {
       logger.error(
         `Failed to start agent session [room=${roomName}, participant=${participantIdentity}]: ${error}`,
@@ -60,7 +83,11 @@ export default defineAgent({
       throw error;
     }
 
-    session.generateReply({ instructions: 'Greet the user and offer your assistance.' });
+    const greeting = arenaMetadata
+      ? buildArenaGreeting(arenaMetadata)
+      : 'Greet the user and offer your assistance.';
+
+    session.generateReply({ instructions: greeting });
   },
 });
 
