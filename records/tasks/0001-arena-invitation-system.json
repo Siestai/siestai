@@ -1,0 +1,282 @@
+{
+  "title": "Arena Invitation System & External Agent Integration",
+  "plan": "records/plans/0001-arena-invitation-system.md",
+  "tasks": [
+    {
+      "id": 1,
+      "phase": 1,
+      "description": "Add arena types and WebSocket protocol interfaces to the frontend shared types file, covering arena sessions, invite tokens, external participants, and the WS message schema.",
+      "steps": [
+        "Add ArenaSessionStatus type: 'waiting' | 'active' | 'ended'",
+        "Add ArenaParticipantType type: 'human' | 'native_agent' | 'external_agent'",
+        "Add ArenaParticipantStatus type: 'invited' | 'joining' | 'connected' | 'disconnected'",
+        "Add ArenaParticipant interface: { id, name, type: ArenaParticipantType, platform?: string, model?: string, status: ArenaParticipantStatus, color: string, joinedAt?: string }",
+        "Add ArenaSession interface: { id, topic?: string, mode: ArenaMode, participationMode: ParticipationMode, status: ArenaSessionStatus, participants: ArenaParticipant[], createdAt: string, expiresAt: string }",
+        "Add ArenaInvite interface: { token: string, sessionId: string, url: string, expiresAt: string }",
+        "Add ArenaWsServerMessage as discriminated union: { type: 'welcome', sessionId, participants[] } | { type: 'transcript', speaker, text, timestamp } | { type: 'agent_message', speaker, text, timestamp } | { type: 'system', event: 'participant_joined'|'participant_left', participant: ArenaParticipant } | { type: 'session_ended' }",
+        "Add ArenaWsClientMessage as discriminated union: { type: 'message', text } | { type: 'identify', name, platform?, model? }"
+      ],
+      "files": ["ui-web/src/lib/types.ts"],
+      "verify": "cd ui-web && pnpm build",
+      "done": true
+    },
+    {
+      "id": 2,
+      "phase": 1,
+      "description": "Install all backend dependencies needed for the arena module — WebSocket, JWT, and UUID packages.",
+      "steps": [
+        "Run: cd backend && pnpm add @nestjs/websockets @nestjs/platform-ws ws uuid jsonwebtoken",
+        "Run: cd backend && pnpm add -D @types/ws @types/uuid @types/jsonwebtoken",
+        "Verify all 8 packages appear in backend/package.json dependencies and devDependencies"
+      ],
+      "files": ["backend/package.json"],
+      "verify": "cd backend && pnpm build",
+      "done": true
+    },
+    {
+      "id": 3,
+      "phase": 1,
+      "description": "Create DTO classes for arena REST endpoints and backend-side interfaces for arena sessions and participants.",
+      "steps": [
+        "Create backend/src/arena/arena.interfaces.ts — define ArenaSession, ArenaParticipant, ArenaInvite, and ArenaParticipantType/ArenaSessionStatus/ArenaParticipantStatus types (backend-local copies, matching frontend shape)",
+        "Create backend/src/arena/dto/create-arena-session.dto.ts with class-validator: topic (@IsString, @IsNotEmpty, @MaxLength(500)), mode (@IsString, @IsIn(['group','moderated']), default 'group'), participationMode (@IsString, @IsIn(['human_collab','agent_only']), default 'human_collab'), nativeAgents (@IsOptional, @IsArray — each element has name:string, agentId?:string, instructions?:string)",
+        "Create backend/src/arena/dto/join-arena.dto.ts with class-validator: token (@IsString, @IsNotEmpty), agentName (@IsString, @IsNotEmpty, @MaxLength(100)), platform (@IsOptional, @IsString, @MaxLength(50)), model (@IsOptional, @IsString, @MaxLength(100))",
+        "Follow the same decorator style as backend/src/livekit/dto/create-token.dto.ts"
+      ],
+      "files": [
+        "backend/src/arena/arena.interfaces.ts",
+        "backend/src/arena/dto/create-arena-session.dto.ts",
+        "backend/src/arena/dto/join-arena.dto.ts"
+      ],
+      "verify": "cd backend && pnpm build",
+      "done": true
+    },
+    {
+      "id": 4,
+      "phase": 2,
+      "description": "Create InvitationService that generates and validates JWT invite tokens for arena sessions. Uses ARENA_INVITE_SECRET, separate from LiveKit credentials.",
+      "steps": [
+        "Create backend/src/arena/invitation.service.ts as @Injectable()",
+        "Inject ConfigService to read ARENA_INVITE_SECRET from env",
+        "Implement generateInvite(sessionId: string, expiresInSeconds = 3600): signs JWT with payload { sessionId, role: 'agent' } using jsonwebtoken sign(), returns { token, expiresAt: ISO string }",
+        "Implement generateHostToken(sessionId: string): signs JWT with payload { sessionId, role: 'host' } — used by the frontend WebSocket to receive participant updates without being an agent",
+        "Implement validateInvite(token: string): verifies JWT with jsonwebtoken verify(), returns decoded { sessionId, role } or throws UnauthorizedException",
+        "Implement buildInviteUrl(token: string): reads FRONTEND_URL from env (default 'http://localhost:3000'), returns `${frontendUrl}/arena/join?t=${token}`",
+        "Add ARENA_INVITE_SECRET and FRONTEND_URL to backend/.env.example with placeholder values",
+        "Add ARENA_INVITE_SECRET=<generate-random-32-char-string> and FRONTEND_URL=http://localhost:3000 to backend/.env"
+      ],
+      "files": [
+        "backend/src/arena/invitation.service.ts",
+        "backend/.env.example",
+        "backend/.env"
+      ],
+      "verify": "cd backend && pnpm build",
+      "done": true
+    },
+    {
+      "id": 5,
+      "phase": 2,
+      "description": "Create ArenaService that manages arena sessions in-memory — CRUD for sessions, participant management, color assignment.",
+      "steps": [
+        "Create backend/src/arena/arena.service.ts as @Injectable()",
+        "Inject InvitationService",
+        "Private field: sessions = new Map<string, ArenaSession>()",
+        "Define AGENT_COLORS array: ['#3b82f6','#22c55e','#eab308','#ef4444','#8b5cf6','#ec4899'] (matches frontend AGENT_CARD_COLORS)",
+        "Implement createSession(dto: CreateArenaSessionDto): generates UUID via uuid/v4, builds ArenaSession with status 'waiting', maps dto.nativeAgents to ArenaParticipant[] with type 'native_agent' and assigned colors, calls invitationService.generateInvite() and .generateHostToken(), returns { session, invite: { token, url, expiresAt }, hostToken }",
+        "Implement getSession(id: string): returns session from Map or throws NotFoundException",
+        "Implement addExternalParticipant(sessionId, name, platform?, model?): creates ArenaParticipant with type 'external_agent', assigns next color from AGENT_COLORS based on current participant count, status 'connected', returns the new participant",
+        "Implement updateParticipantStatus(sessionId, participantId, status): finds participant and updates status field",
+        "Implement endSession(sessionId): sets session status to 'ended'"
+      ],
+      "files": ["backend/src/arena/arena.service.ts"],
+      "verify": "cd backend && pnpm build",
+      "done": true
+    },
+    {
+      "id": 6,
+      "phase": 3,
+      "description": "Create ArenaController with REST endpoints for session creation, session retrieval, and external agent join.",
+      "steps": [
+        "Create backend/src/arena/arena.controller.ts with @Controller('arena')",
+        "Inject ArenaService and InvitationService",
+        "POST /arena/sessions — accepts @Body() CreateArenaSessionDto, calls arenaService.createSession(), returns { session, invite: { token, url, expiresAt }, hostToken }",
+        "GET /arena/sessions/:id — accepts @Param('id') id, calls arenaService.getSession(), returns session object with participants array",
+        "POST /arena/join — accepts @Body() JoinArenaDto, calls invitationService.validateInvite(dto.token) to get sessionId, then arenaService.addExternalParticipant(), returns { sessionId, wsUrl: '/arena/ws?token=${dto.token}', participant }",
+        "Wrap each method in try/catch consistent with LivekitController — let NestJS default exception filters handle NotFoundException and UnauthorizedException"
+      ],
+      "files": ["backend/src/arena/arena.controller.ts"],
+      "verify": "cd backend && pnpm build",
+      "done": true
+    },
+    {
+      "id": 7,
+      "phase": 3,
+      "description": "Create ArenaGateway — NestJS WebSocket gateway at /arena/ws that authenticates connections via JWT, relays messages between external agents, and broadcasts participant join/leave events to all clients (including the host frontend).",
+      "steps": [
+        "Create backend/src/arena/arena.gateway.ts using @WebSocketGateway({ path: '/arena/ws' })",
+        "Inject InvitationService and ArenaService",
+        "Define WS message interfaces locally: WsServerMessage and WsClientMessage (discriminated unions matching the protocol in the plan)",
+        "handleConnection(client: WebSocket, ...args): extract token from URL query string (parse from args[0].url), validate via invitationService.validateInvite(). If role='agent', call arenaService.addExternalParticipant() — if role='host', just register. Store { sessionId, participantId?, role } in a Map<WebSocket, ClientInfo>. Send 'welcome' message with session data. Broadcast 'system' participant_joined to other clients. On validation failure: send error JSON and client.close()",
+        "Subscribe to 'message' events via @SubscribeMessage or raw ws.on('message'): parse JSON, handle type='identify' (update participant info), type='message' (broadcast as agent_message to all other clients in same session)",
+        "broadcastToSession(sessionId, message, excludeClient?): iterate Map entries, send to all clients in matching session except the excluded one",
+        "handleDisconnect(client): look up client info, if role='agent' call arenaService.updateParticipantStatus(disconnected), broadcast system participant_left event, remove from Map",
+        "Note: NestJS WsAdapter with raw ws requires using afterInit + handleConnection rather than decorators — check @nestjs/platform-ws docs for exact pattern"
+      ],
+      "files": ["backend/src/arena/arena.gateway.ts"],
+      "verify": "cd backend && pnpm build",
+      "done": true
+    },
+    {
+      "id": 8,
+      "phase": 3,
+      "description": "Create ArenaModule, register it in AppModule, and configure the WsAdapter in main.ts for WebSocket support.",
+      "steps": [
+        "Create backend/src/arena/arena.module.ts — @Module with controllers: [ArenaController], providers: [ArenaService, InvitationService, ArenaGateway]",
+        "ConfigModule is already global so no need to import it here",
+        "Update backend/src/app.module.ts: import ArenaModule and add to imports array alongside LivekitModule",
+        "Update backend/src/main.ts: import { WsAdapter } from '@nestjs/platform-ws', call app.useWebSocketAdapter(new WsAdapter(app)) before app.listen()",
+        "Verify CORS in main.ts — the existing enableCors() only covers HTTP; the WsAdapter handles WS connections at the gateway level (no additional CORS config needed for ws:// protocol)"
+      ],
+      "files": [
+        "backend/src/arena/arena.module.ts",
+        "backend/src/app.module.ts",
+        "backend/src/main.ts"
+      ],
+      "verify": "cd backend && pnpm build",
+      "done": true
+    },
+    {
+      "id": 9,
+      "phase": 4,
+      "description": "Add frontend API functions for arena session creation, session retrieval, and agent join — follows the same pattern as the existing livekit.ts fetch functions.",
+      "steps": [
+        "Create ui-web/src/lib/arena-api.ts",
+        "Import API_URL from './livekit' (reuse the same backend base URL)",
+        "Implement createArenaSession(params: { topic: string, mode: ArenaMode, participationMode: ParticipationMode, nativeAgents?: { name: string, agentId?: string, instructions?: string }[] }): POST to `${API_URL}/arena/sessions`, returns { session: ArenaSession, invite: ArenaInvite, hostToken: string }",
+        "Implement getArenaSession(id: string): GET `${API_URL}/arena/sessions/${id}`, returns ArenaSession",
+        "Implement joinArena(params: { token: string, agentName: string, platform?: string, model?: string }): POST to `${API_URL}/arena/join`, returns { sessionId, wsUrl, participant: ArenaParticipant }",
+        "Helper buildWsUrl(hostToken: string): constructs full WebSocket URL from API_URL (replace http with ws) + '/arena/ws?token=' + hostToken",
+        "Add error handling: check response.ok, parse error body, throw descriptive Error — same pattern as fetchToken in livekit.ts"
+      ],
+      "files": ["ui-web/src/lib/arena-api.ts"],
+      "verify": "cd ui-web && pnpm build",
+      "done": true
+    },
+    {
+      "id": 10,
+      "phase": 4,
+      "description": "Create ArenaSessionContext — React context that manages arena session lifecycle and connects to the backend WebSocket for real-time participant updates.",
+      "steps": [
+        "Create ui-web/src/lib/arena-session-context.tsx",
+        "Define ArenaSessionContextValue: { session: ArenaSession | null, invite: ArenaInvite | null, participants: ArenaParticipant[], connectionStatus: 'disconnected'|'connecting'|'connected', createSession(params): Promise<void>, startListening(): void, endSession(): void }",
+        "ArenaSessionProvider component: holds session, invite, hostToken, participants state, and wsRef (useRef<WebSocket>)",
+        "createSession: calls createArenaSession API, stores session + invite + hostToken in state",
+        "startListening: connects WebSocket using buildWsUrl(hostToken), registers handlers — on 'welcome': set participants, on 'system/participant_joined': append to participants, on 'system/participant_left': update status in participants, on 'session_ended': clean up",
+        "endSession: close WebSocket, clear state",
+        "Cleanup: close WS on unmount",
+        "Export useArenaSession() hook that returns context value"
+      ],
+      "files": ["ui-web/src/lib/arena-session-context.tsx"],
+      "verify": "cd ui-web && pnpm build",
+      "done": true
+    },
+    {
+      "id": 11,
+      "phase": 5,
+      "description": "Create InviteLinkPanel component — displays the arena invitation link with copy-to-clipboard, expiration countdown, and a live list of joined external agents.",
+      "steps": [
+        "Create ui-web/src/components/arena/invite-link-panel.tsx",
+        "Props: invite: ArenaInvite, participants: ArenaParticipant[], onStartCall: () => void",
+        "Show invite URL in a read-only Input with a 'Copy' Button beside it — on click: navigator.clipboard.writeText(invite.url), toggle button text to 'Copied!' for 2 seconds using useState + setTimeout",
+        "Show expiration countdown: calculate remaining time from invite.expiresAt, display as 'Expires in Xm' using a useEffect interval that updates every 60s",
+        "Show participant list: map over participants, show name + status badge (Badge component) + platform label if present. Filter to show only external_agent type. Status colors: 'joining'=yellow, 'connected'=green, 'disconnected'=gray",
+        "Show 'Start Call' Button (calls onStartCall) — enabled only when at least 1 external agent is connected, styled as primary with Mic icon",
+        "Use Card, Button, Badge, Input from shadcn/ui components"
+      ],
+      "files": ["ui-web/src/components/arena/invite-link-panel.tsx"],
+      "verify": "cd ui-web && pnpm build",
+      "done": true
+    },
+    {
+      "id": 12,
+      "phase": 5,
+      "description": "Create ExternalParticipantTile component — Google Meet-like tile for external agents in the arena grid. Shows status and speaking state via WebSocket events, not audio analysis. Inspired by VoiceForge's ParticipantTile in /Users/orhanors/Desktop/voice/voice-fe/components/arena/arena-room.tsx.",
+      "steps": [
+        "Create ui-web/src/components/arena/external-participant-tile.tsx",
+        "Props: { name: string, color: string, platform?: string, status: ArenaParticipantStatus, isSpeaking: boolean }",
+        "Layout: centered flex column with avatar circle, name, platform badge, status indicator — same structure as VoiceForge's ParticipantTile (rounded-xl border, min-h-[200px])",
+        "Avatar circle: 64x64 rounded-full with color background at 30% opacity, User icon from lucide-react. When speaking: show animated ring (scale transform 1 + 0.3, pulsing opacity). When joining: show Loader2 spinning icon. When disconnected: gray out",
+        "Name label: text-sm font-semibold. Below it, show platform in text-xs text-muted-foreground (e.g., 'via OpenClaw')",
+        "Status badge below avatar: 'Speaking' (green pulse dot), 'Connected' (no badge), 'Joining...' (yellow + loader), 'Disconnected' (gray)",
+        "Border and shadow: when isSpeaking, borderColor = color with shadow glow, background tinted — same pattern as VoiceForge's dynamic style={{ borderColor, backgroundColor, boxShadow }}"
+      ],
+      "files": ["ui-web/src/components/arena/external-participant-tile.tsx"],
+      "verify": "cd ui-web && pnpm build",
+      "done": true
+    },
+    {
+      "id": 13,
+      "phase": 6,
+      "description": "Update the Arena page to integrate the invitation flow — add a 'waiting room' state between setup and live, wire up ArenaSessionContext, and render external participant tiles in the arena grid.",
+      "steps": [
+        "Update ui-web/src/app/arena/page.tsx",
+        "Replace the current binary showRoom toggle with an explicit pageState: 'setup' | 'waiting' | 'live' | 'ended' (default 'setup'). Remove showRoom and replace all checks of `showRoom && token` with `pageState === 'live'`",
+        "Wrap ArenaPageContent in <ArenaSessionProvider> (import from arena-session-context)",
+        "In the 'Start Conversation' handler (handleStartConversation): instead of calling fetchArenaToken directly, call arenaSession.createSession() with current config, then call arenaSession.startListening() to open the WS, then set pageState to 'waiting'",
+        "Add 'waiting' state render: show InviteLinkPanel with invite URL and live participant list from arenaSession.participants. The 'Start Call' button in InviteLinkPanel transitions pageState to 'live' — at that point, fetch the LiveKit token (existing flow) and mount LiveKitRoom",
+        "In the 'live' state: keep existing LiveKitRoom render, but add ExternalParticipantTile components for each external_agent participant from arenaSession.participants, rendered alongside native agent tiles in the grid",
+        "Add 'ended' state: session summary with duration and participant count, 'New Session' button resets to 'setup'"
+      ],
+      "files": ["ui-web/src/app/arena/page.tsx"],
+      "verify": "cd ui-web && pnpm build",
+      "done": true
+    },
+    {
+      "id": 14,
+      "phase": 7,
+      "description": "Create the OpenClaw SKILL.md — a drop-in skill file that teaches an OpenClaw agent how to parse Siestai arena invitation links and participate in discussions via WebSocket.",
+      "steps": [
+        "Create openclaw-skill/SKILL.md with YAML frontmatter: name (siestai-arena), description ('Join Siestai arena sessions for multi-agent voice discussions via invitation links'), requires.bins ([curl, websocat])",
+        "Instruction body: detect Siestai arena URLs (pattern: */arena/join?t=*) in user messages",
+        "Step 1: Extract the token value from the URL query parameter t",
+        "Step 2: Join the arena — curl -X POST http://<host>/arena/join -H 'Content-Type: application/json' -d '{\"token\":\"<token>\",\"agentName\":\"<your_name>\"}'",
+        "Step 3: Connect WebSocket — websocat ws://<host>/arena/ws?token=<token>",
+        "Step 4: Send identify message — {\"type\":\"identify\",\"name\":\"<your_name>\",\"platform\":\"openclaw\"}",
+        "Step 5: Listen for incoming messages. On type='transcript' or type='agent_message', formulate a response. Send responses as {\"type\":\"message\",\"text\":\"...\"}",
+        "Step 6: When type='session_ended' is received, disconnect gracefully",
+        "Include note: the host address defaults to localhost:4200 but should be configured by the user",
+        "Create openclaw-skill/README.md: title, what it does, installation (copy folder to ~/.openclaw/skills/siestai-arena/), prerequisites (websocat binary), usage example"
+      ],
+      "files": [
+        "openclaw-skill/SKILL.md",
+        "openclaw-skill/README.md"
+      ],
+      "verify": "test -f openclaw-skill/SKILL.md && test -f openclaw-skill/README.md && echo 'SKILL files exist'",
+      "done": true
+    },
+    {
+      "id": 15,
+      "phase": 7,
+      "description": "Create a CLI test script that simulates an external agent joining an arena session over WebSocket — used for development testing without a real OpenClaw instance.",
+      "steps": [
+        "Create scripts/test-external-agent.ts",
+        "Import WebSocket from 'ws' and use native fetch for HTTP calls",
+        "Parse CLI args: --url (default 'http://localhost:4200'), --name (default 'TestBot'), --session-id (optional, creates new session if not provided)",
+        "If no --session-id: POST /arena/sessions to create a session, log the invite URL, extract invite token",
+        "POST /arena/join with the token and agent name, get back wsUrl",
+        "Connect to WebSocket at the returned wsUrl",
+        "On open: send identify message with name and platform='test-script'",
+        "On message: parse JSON, log with timestamp. If type='transcript' or type='agent_message': wait 2s then send a response message with text 'TestBot responding to: <first 50 chars of received text>'",
+        "On close/error: log and exit",
+        "Auto-disconnect after 60s with process.exit(0)",
+        "Add to backend/package.json scripts: \"test:external-agent\": \"npx tsx ../scripts/test-external-agent.ts\""
+      ],
+      "files": [
+        "scripts/test-external-agent.ts",
+        "backend/package.json"
+      ],
+      "verify": "test -f scripts/test-external-agent.ts && echo 'Test script exists'",
+      "done": true
+    }
+  ]
+}

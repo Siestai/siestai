@@ -1,6 +1,7 @@
 .agents/
 .terminal-logs/
 screenshots/
+designs/
 .DS_Store
 
 # Environment files
