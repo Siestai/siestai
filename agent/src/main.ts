@@ -33,6 +33,7 @@ export default defineAgent({
     const roomName = ctx.room.name;
     const participantIdentity = ctx.room.localParticipant?.identity ?? 'unknown';
 
+    // Connect first: required to read room.metadata (arena) and for session.start()
     await ctx.connect();
 
     const arenaMetadata = parseArenaMetadata(ctx.room.metadata);
