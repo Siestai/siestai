@@ -1,6 +1,6 @@
 # Plan: Mastra Agents Service
 
-**Status:** Proposed (v2 — revised after voice project review)
+**Status:** Proposed (v3 — refined after doc review + codebase audit)
 **Date:** 2026-02-27
 **Tasks:** records/tasks/0003-mastra-agents-service.json
 
@@ -8,7 +8,7 @@
 The Agents page is entirely mock data — hardcoded agents in `ui-web/src/lib/api.ts` with no backend persistence. Users can't create, edit, or delete agents. The arena setup wizard Step 1 (agent selection) is non-functional. There's no structured agent runtime framework.
 
 ## Decision
-Add a **Mastra service** (`mastra/`) to the monorepo as the agent runtime and management layer. Use **PostgreSQL + Drizzle** for agent persistence. Mastra agents support `stream()` for real-time responses. The NestJS backend proxies agent CRUD to the Mastra service. The arena agent picker (modeled after the `voice` project's `AgentPicker` component) fetches real agents and passes them to session creation.
+Add a **Mastra service** (`mastra/`) to the monorepo as the agent runtime and management layer. Use **PostgreSQL + Drizzle** for a custom `agents` table. Use **Mastra's built-in server** (Hono-based, port 4111) with `registerApiRoute()` for custom CRUD endpoints. Mastra auto-exposes `/api/agents/:agentId/stream` for registered agents. The NestJS backend proxies agent CRUD to the Mastra service. The arena agent picker fetches real agents and passes them to session creation.
 
 ## Voice Project Reference
 The `Siestai/voice` repo has a mature arena implementation we should align with:
@@ -29,9 +29,21 @@ Our siestai arena should mirror this pattern but simplified for the current scop
                                                   │
                                           ┌───────▼────────┐
                                           │  PostgreSQL     │
-                                          │  (Drizzle ORM)  │
+                                          │  (Drizzle ORM   │
+                                          │  + @mastra/pg)  │
                                           └────────────────┘
 ```
+
+### How storage works
+- **Custom `agents` table**: Managed by **Drizzle ORM** (`drizzle-orm` + `drizzle-kit`) with our own schema. This is independent of Mastra's internal storage.
+- **Mastra internals** (memory, threads, workflow state): Managed by **`@mastra/pg` (`PostgresStore`)**, which auto-creates its own tables (`mastra_threads`, `mastra_messages`, etc.).
+- Both use the same PostgreSQL database via `DATABASE_URL`.
+
+### How the server works
+- `mastra dev` starts a Hono server on port 4111
+- Registered agents auto-get: `POST /api/agents/:agentId/stream` and `POST /api/agents/:agentId/generate`
+- Custom CRUD routes added via `registerApiRoute()` in the Mastra config
+- No need for separate Express/Hono setup
 
 ## Agent Schema (Core Fields — Day 1)
 
@@ -62,7 +74,7 @@ interface Agent {
 Voice config fields (voice_id, tts_provider, stt_provider, etc.) deferred to a future plan.
 
 ## Mastra Agent Runtime
-Mastra agents are registered as runtime instances that support `agent.stream()` for real-time text generation. The Mastra service exposes streaming endpoints so the backend can proxy streamed responses to the frontend. This enables:
+Mastra agents are registered in the `Mastra` instance. Once registered, they auto-expose streaming endpoints. For dynamic agents (loaded from DB), we create `Agent` instances at request time using `new Agent({ name, instructions, model })` and call `.stream()` directly. This enables:
 - Chat with individual agents (Live page)
 - Arena multi-agent conversations where each agent streams responses
 - Future: tool use, MCP integration, workflows
@@ -70,28 +82,29 @@ Mastra agents are registered as runtime instances that support `agent.stream()` 
 ## Phases
 
 ### Phase 1: Mastra Service Setup
-Scaffold Mastra service, Drizzle schema with core fields + AgentSource, CRUD routes, streaming endpoint.
+Scaffold Mastra service, Drizzle schema with custom agents table + AgentSource enum, Mastra entry point with registered agents, custom CRUD routes via `registerApiRoute()`.
 
 ### Phase 2: Backend Agent Module
-NestJS proxy module for agent CRUD + stream passthrough.
+NestJS proxy module for agent CRUD + stream passthrough. Install `@nestjs/axios`.
 
 ### Phase 3: Frontend — Replace Mock Data
-Real API client, create/edit/delete agents, AgentPicker component (modeled after voice project).
+Real API client, create/edit/delete agents, update types (remove voice fields, add source).
 
 ### Phase 4: Arena Agent Selection
 Wire AgentPicker into arena setup Step 1. Selected agents → `nativeAgents` with instructions to `createSession`.
 
 ### Phase 5: Infrastructure
-Seed agents, PostgreSQL in docker-compose, dev setup.
+PostgreSQL in docker-compose, seed agents, dev setup.
 
 ## Reference Files
 - `ui-web/src/app/agents/page.tsx` — agents list (mock data)
 - `ui-web/src/lib/api.ts` — mock API client
-- `ui-web/src/lib/types.ts` — Agent interface
-- `ui-web/src/app/arena/page.tsx` — arena setup (non-functional Step 1)
-- `voice-fe/components/arena/agent-picker.tsx` — reference AgentPicker from voice project
-- `voice-fe/app/arena/page.tsx` — reference arena flow from voice project
-- `backend/src/arena/arena.service.ts` — createSession
+- `ui-web/src/lib/types.ts` — Agent interface (has voice fields to remove + call_count)
+- `ui-web/src/components/agents/agent-card.tsx` — renders call_count, needs update
+- `ui-web/src/app/arena/page.tsx` — arena setup (Step 1 placeholder, `canProceedFromStep(1)` always true)
+- `ui-web/src/lib/arena-api.ts` — `CreateArenaSessionParams` has `nativeAgents` field
+- `backend/src/arena/arena.service.ts` — `createSession` accepts `nativeAgents`
+- `backend/src/arena/dto/create-arena-session.dto.ts` — `NativeAgentDto` has `agentId` field
 
 ## Non-Goals
 - Voice config (TTS/STT provider, voice selection) — future plan
