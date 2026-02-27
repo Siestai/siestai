@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { CallTimer } from "@/components/live/call-timer";
 import { useConversationTranscript } from "@/hooks/use-conversation-transcript";
 import { ArenaTranscript, ArenaTranscriptToggleButton } from "./arena-transcript";
+import { ExternalParticipantTile } from "./external-participant-tile";
 import type { ArenaParticipant, ParticipationMode, TranscriptMessage } from "@/lib/types";
 
 interface ArenaRoomProps {
@@ -238,6 +239,11 @@ export function ArenaRoom({
     [participants],
   );
 
+  const externalAgents = useMemo(
+    () => participants.filter((p) => p.type === "external_agent"),
+    [participants],
+  );
+
   // Track unread when sidebar is closed
   useEffect(() => {
     if (!sidebarOpen && messages.length > prevCountRef.current) {
@@ -272,7 +278,7 @@ export function ArenaRoom({
         <div
           className={cn(
             "grid gap-4 w-full",
-            nativeAgents.length + (participationMode === "human_collab" ? 1 : 0) <= 2
+            nativeAgents.length + externalAgents.length + (participationMode === "human_collab" ? 1 : 0) <= 2
               ? "grid-cols-1 sm:grid-cols-2"
               : "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3",
           )}
@@ -286,6 +292,16 @@ export function ArenaRoom({
             />
           ))}
           {participationMode === "human_collab" && <HumanTile />}
+          {externalAgents.map((agent) => (
+            <ExternalParticipantTile
+              key={agent.id}
+              name={agent.name}
+              color={agent.color}
+              platform={agent.platform}
+              status={agent.status}
+              isSpeaking={activeSpeaker === agent.name}
+            />
+          ))}
         </div>
 
         {/* End session button */}
