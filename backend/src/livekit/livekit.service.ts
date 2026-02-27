@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { AccessToken, RoomServiceClient } from 'livekit-server-sdk';
 import { RoomAgentDispatch, RoomConfiguration } from '@livekit/protocol';
 import { CreateTokenDto } from './dto/create-token.dto';
+// TODO: Consider moving ArenaSession to a shared types folder if more cross-module deps emerge
 import { ArenaSession } from '../arena/arena.interfaces';
 import { randomBytes } from 'crypto';
 
