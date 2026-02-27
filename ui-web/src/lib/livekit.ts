@@ -42,6 +42,23 @@ export async function fetchToken(
   return response.json() as Promise<TokenResponse>;
 }
 
+export async function fetchArenaToken(
+  sessionId: string,
+): Promise<TokenResponse> {
+  const response = await fetch(`${API_URL}/arena/sessions/${sessionId}/start`, {
+    method: "POST",
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text().catch(() => "Unknown error");
+    throw new Error(
+      `Failed to start arena session: ${response.status} ${errorText}`,
+    );
+  }
+
+  return response.json() as Promise<TokenResponse>;
+}
+
 export const ROOM_OPTIONS: RoomOptions = {
   audioCaptureDefaults: {
     autoGainControl: true,
