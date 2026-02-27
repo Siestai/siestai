@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  BadRequestException,
+  NotFoundException,
+} from '@nestjs/common';
 import { v4 as uuidv4 } from 'uuid';
 import { InvitationService } from './invitation.service';
 import { CreateArenaSessionDto } from './dto/create-arena-session.dto';
@@ -114,6 +118,17 @@ export class ArenaService {
     if (participant) {
       participant.status = status;
     }
+  }
+
+  startSession(sessionId: string, roomName: string): void {
+    const session = this.getSession(sessionId);
+    if (session.status !== 'waiting') {
+      throw new BadRequestException(
+        `Session ${sessionId} is not in 'waiting' status`,
+      );
+    }
+    session.status = 'active';
+    session.roomName = roomName;
   }
 
   endSession(sessionId: string): void {

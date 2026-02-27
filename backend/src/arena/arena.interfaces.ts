@@ -29,6 +29,7 @@ export interface ArenaSession {
   participants: ArenaParticipant[];
   createdAt: string;
   expiresAt: string;
+  roomName?: string;
 }
 
 export interface ArenaInvite {
