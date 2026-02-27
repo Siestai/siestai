@@ -126,6 +126,13 @@ export const AGENT_CARD_COLORS = [
   "#ec4899",
 ] as const;
 
+// Arena LiveKit state (held by context while connected to a LiveKit room)
+export interface ArenaLiveState {
+  roomName: string;
+  token: string;
+  serverUrl: string;
+}
+
 // Arena session & invitation types
 export type ArenaSessionStatus = "waiting" | "active" | "ended";
 export type ArenaParticipantType = "human" | "native_agent" | "external_agent";
@@ -187,6 +194,11 @@ export type ArenaWsServerMessage =
       type: "system";
       event: "participant_joined" | "participant_left";
       participant: ArenaParticipant;
+    }
+  | {
+      type: "system";
+      event: "session_started";
+      roomName: string;
     }
   | {
       type: "session_ended";
