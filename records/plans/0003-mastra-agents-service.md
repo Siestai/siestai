@@ -1,14 +1,23 @@
 # Plan: Mastra Agents Service
 
-**Status:** Proposed
+**Status:** Proposed (v2 — revised after voice project review)
 **Date:** 2026-02-27
 **Tasks:** records/tasks/0003-mastra-agents-service.json
 
 ## Problem
-The Agents page is entirely mock data — hardcoded agents in `ui-web/src/lib/api.ts` with no backend persistence. Users can't create, edit, or delete agents. The arena setup wizard Step 1 (agent selection) is non-functional because there are no real agents to select from. There's no agent runtime framework — the LiveKit voice agent has inline logic with no structured tool/agent composition.
+The Agents page is entirely mock data — hardcoded agents in `ui-web/src/lib/api.ts` with no backend persistence. Users can't create, edit, or delete agents. The arena setup wizard Step 1 (agent selection) is non-functional. There's no structured agent runtime framework.
 
 ## Decision
-Add a **Mastra service** (`mastra/`) to the monorepo as the agent runtime and management layer. Mastra provides a TypeScript-native agent framework with tools, structured output, and a built-in server. Use **PostgreSQL + Drizzle** as the persistence layer for agent definitions (CRUD). The NestJS backend proxies agent CRUD to the Mastra service, and the frontend replaces mock data with real API calls. Arena setup wizard Step 1 fetches real agents for selection and passes them as `nativeAgents` to session creation.
+Add a **Mastra service** (`mastra/`) to the monorepo as the agent runtime and management layer. Use **PostgreSQL + Drizzle** for agent persistence. Mastra agents support `stream()` for real-time responses. The NestJS backend proxies agent CRUD to the Mastra service. The arena agent picker (modeled after the `voice` project's `AgentPicker` component) fetches real agents and passes them to session creation.
+
+## Voice Project Reference
+The `Siestai/voice` repo has a mature arena implementation we should align with:
+- **`AgentPicker`** — fetches agents from API, toggle-select UI with max 4, shows voice/category
+- **`AgentConfigPanel`** — manual mode: name + voice + instructions per agent
+- **`ArenaRoom`** — volume visualization, speaker detection, call timer, transcript sidebar
+- **Arena page flow** — config mode toggle (agents vs manual), participation mode, duration picker, moderator option, topic input, provider settings
+
+Our siestai arena should mirror this pattern but simplified for the current scope.
 
 ## Architecture
 ```
@@ -24,58 +33,69 @@ Add a **Mastra service** (`mastra/`) to the monorepo as the agent runtime and ma
                                           └────────────────┘
 ```
 
-**Flow:**
-1. User creates/edits agents on the Agents page → Frontend calls Backend
-2. Backend proxies to Mastra service (`/api/agents` REST)
-3. Mastra service persists agent configs in PostgreSQL via Drizzle
-4. Arena setup Step 1 fetches agent list → user selects agents → passed as `nativeAgents`
-5. Mastra agents are available as runtime instances (for future: arena voice agent reads agent config from Mastra)
+## Agent Schema (Core Fields — Day 1)
 
-## Reference Files
-- `ui-web/src/app/agents/page.tsx` — agents list page (currently uses mock data)
-- `ui-web/src/app/agents/[id]/page.tsx` — agent detail page
-- `ui-web/src/lib/api.ts` — API client with mock agents (lines 18-160)
-- `ui-web/src/lib/types.ts` — Agent interface definition
-- `ui-web/src/components/agents/agent-card.tsx` — agent card component
-- `ui-web/src/app/arena/page.tsx` — arena setup Step 1 (non-functional agent selection)
-- `backend/src/app.module.ts` — NestJS root module
-- `backend/src/arena/arena.service.ts` — createSession (nativeAgents param)
+```typescript
+enum AgentSource {
+  MASTRA = 'mastra',      // Mastra runtime agent (internal)
+  LIVEKIT = 'livekit',    // LiveKit voice agent
+  EXTERNAL = 'external',  // External agent (OpenClaw, third-party)
+}
+
+interface Agent {
+  id: string;               // uuid
+  name: string;             // max 100 chars
+  description: string;      // short description
+  instructions: string;     // system prompt
+  category: string;         // conversational, creative, technical, debate
+  tags: string[];           // labels
+  color: string;            // hex color for UI
+  icon: string;             // icon name
+  source: AgentSource;      // where this agent runs
+  llm_model: string | null; // e.g. openai/gpt-4.1-mini
+  is_online: boolean;       // availability flag
+  created_at: string;
+  updated_at: string;
+}
+```
+
+Voice config fields (voice_id, tts_provider, stt_provider, etc.) deferred to a future plan.
+
+## Mastra Agent Runtime
+Mastra agents are registered as runtime instances that support `agent.stream()` for real-time text generation. The Mastra service exposes streaming endpoints so the backend can proxy streamed responses to the frontend. This enables:
+- Chat with individual agents (Live page)
+- Arena multi-agent conversations where each agent streams responses
+- Future: tool use, MCP integration, workflows
 
 ## Phases
 
 ### Phase 1: Mastra Service Setup
-Initialize the Mastra service in the monorepo with PostgreSQL + Drizzle. Create the database schema for agent definitions. Set up the Mastra server with agent CRUD endpoints.
+Scaffold Mastra service, Drizzle schema with core fields + AgentSource, CRUD routes, streaming endpoint.
 
 ### Phase 2: Backend Agent Module
-Add an `agents` module to the NestJS backend that proxies CRUD operations to the Mastra service. Endpoints: list, get, create, update, delete agents.
+NestJS proxy module for agent CRUD + stream passthrough.
 
 ### Phase 3: Frontend — Replace Mock Data
-Replace the mock API client with real backend calls. Wire up the Agents page, agent detail page, and add a Create/Edit Agent form.
+Real API client, create/edit/delete agents, AgentPicker component (modeled after voice project).
 
 ### Phase 4: Arena Agent Selection
-Make arena setup Step 1 functional — fetch real agents, allow selection, pass selected agents as `nativeAgents` to session creation with their instructions.
+Wire AgentPicker into arena setup Step 1. Selected agents → `nativeAgents` with instructions to `createSession`.
 
-### Phase 5: Seed Agents
-Create 3-4 default agents (Atlas, Nova, Sage, Debate Bot) via a seed script so the platform has agents out of the box for testing.
+### Phase 5: Infrastructure
+Seed agents, PostgreSQL in docker-compose, dev setup.
 
-## Constraints
-- Mastra service runs on port 4111 (default)
-- PostgreSQL connection via `DATABASE_URL` env var
-- Agent schema must include: id, name, description, instructions, category, tags, color, icon, voice config, model config
-- The existing `Agent` TypeScript interface in `types.ts` is the source of truth for the agent shape
-- Mastra agents are config-only for now — runtime tool execution comes in a future plan
-- Keep the NestJS backend as the API gateway — frontend never calls Mastra directly
+## Reference Files
+- `ui-web/src/app/agents/page.tsx` — agents list (mock data)
+- `ui-web/src/lib/api.ts` — mock API client
+- `ui-web/src/lib/types.ts` — Agent interface
+- `ui-web/src/app/arena/page.tsx` — arena setup (non-functional Step 1)
+- `voice-fe/components/arena/agent-picker.tsx` — reference AgentPicker from voice project
+- `voice-fe/app/arena/page.tsx` — reference arena flow from voice project
+- `backend/src/arena/arena.service.ts` — createSession
 
 ## Non-Goals
-- Agent runtime tool execution (tools, MCP, workflows) — future plan
-- Voice configuration (TTS/STT provider selection) — already exists in the Agent type, just persist it
+- Voice config (TTS/STT provider, voice selection) — future plan
+- Agent tool execution, MCP, workflows — future plan
 - Agent analytics/call tracking — future
 - Agent versioning — future
-- Authentication/authorization — no auth for staging
-
-## Gotchas
-- **Mastra's built-in agent API** serves agents registered in the Mastra instance. For CRUD, we need a custom REST layer on top of Drizzle, not Mastra's agent registry (which is in-memory). Mastra's `Agent` class is for runtime; persistence is separate.
-- **Drizzle schema** must match the frontend `Agent` interface closely to avoid mapping boilerplate.
-- **`pnpm create mastra`** scaffolds a project with opinions — we may need to restructure to fit our monorepo layout.
-- **PostgreSQL** — need to add to docker-compose.staging.yml and ensure connection works in dev (local postgres or docker).
-- **Arena integration** — when selecting agents in Step 1, we need both the agent `name` and `instructions` to pass as `nativeAgents` to `createSession`. The instructions feed into the LiveKit room metadata → ArenaAgent persona system prompt.
+- Authentication — no auth for staging

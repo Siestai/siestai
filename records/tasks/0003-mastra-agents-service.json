@@ -20,10 +20,11 @@
     {
       "id": 2,
       "phase": 1,
-      "description": "Create Drizzle schema for agents table matching the frontend Agent interface.",
+      "description": "Create Drizzle schema for agents table with core fields and AgentSource enum.",
       "steps": [
         "Create `mastra/src/db/schema.ts` with a `agents` table using Drizzle's `pgTable`",
-        "Columns: `id` (uuid, pk, default gen), `name` (varchar 100, not null), `description` (text), `instructions` (text, not null), `category` (varchar 50), `tags` (json array), `color` (varchar 7), `icon` (varchar 50), `voice_id` (varchar), `preset_voice` (varchar), `stt_provider` (varchar), `llm_provider` (varchar), `tts_provider` (varchar), `tts_engine` (varchar), `tts_cloud_provider` (varchar), `llm_model` (varchar), `is_online` (boolean, default true), `voice_name` (varchar), `call_count` (integer, default 0), `created_at` (timestamp, default now), `updated_at` (timestamp, default now)",
+        "Add `agent_source` pgEnum with values: 'mastra', 'livekit', 'external'",
+        "Core columns: `id` (uuid pk), `name` (varchar 100, not null), `description` (text), `instructions` (text, not null), `category` (varchar 50), `tags` (jsonb, default []), `color` (varchar 7), `icon` (varchar 50), `source` (agent_source enum, default 'mastra'), `llm_model` (varchar), `is_online` (boolean, default true), `created_at` (timestamp, default now), `updated_at` (timestamp, default now)",
         "Create `mastra/src/db/index.ts` — Drizzle client init with `DATABASE_URL`",
         "Create `mastra/drizzle.config.ts` for migrations",
         "Generate initial migration with `pnpm drizzle-kit generate`"
@@ -49,14 +50,29 @@
     },
     {
       "id": 4,
+      "phase": 1,
+      "description": "Register Mastra Agent runtime instances and add a streaming endpoint.",
+      "steps": [
+        "Create `mastra/src/agents/runtime.ts` — function to instantiate Mastra `Agent` from a DB record (name, instructions, model → Agent class)",
+        "Register a default agent in the Mastra instance",
+        "Add POST /api/agents/:id/stream endpoint — loads agent config from DB, creates Mastra Agent instance, calls `agent.stream()`, returns SSE/streaming response",
+        "Handle streaming format compatible with Vercel AI SDK (text stream)",
+        "Wire into the Mastra server"
+      ],
+      "files": ["mastra/src/agents/runtime.ts", "mastra/src/routes/agents.ts"],
+      "verify": "cd mastra && npx tsc --noEmit --pretty 2>&1 | head -20",
+      "done": false
+    },
+    {
+      "id": 5,
       "phase": 2,
-      "description": "Add agents module to NestJS backend that proxies CRUD to the Mastra service.",
+      "description": "Add agents module to NestJS backend that proxies CRUD and streaming to the Mastra service.",
       "steps": [
         "Create `backend/src/agents/agents.module.ts`",
         "Create `backend/src/agents/agents.service.ts` — HttpService calls to Mastra service at `MASTRA_URL` (default http://localhost:4111)",
-        "Create `backend/src/agents/agents.controller.ts` — REST endpoints: GET /agents, GET /agents/:id, POST /agents, PUT /agents/:id, DELETE /agents/:id",
-        "Create `backend/src/agents/dto/create-agent.dto.ts` and `update-agent.dto.ts` with validation",
-        "Import `AgentsModule` in `app.module.ts`",
+        "Create `backend/src/agents/agents.controller.ts` — REST endpoints: GET /agents, GET /agents/:id, POST /agents, PUT /agents/:id, DELETE /agents/:id, POST /agents/:id/stream (passthrough)",
+        "Create DTOs with validation: `create-agent.dto.ts` (name required, instructions required, source enum), `update-agent.dto.ts`",
+        "Import `AgentsModule` + `HttpModule` in `app.module.ts`",
         "Add `MASTRA_URL` to `backend/.env.example`"
       ],
       "files": [
@@ -69,26 +85,27 @@
       "done": false
     },
     {
-      "id": 5,
+      "id": 6,
       "phase": 3,
       "description": "Replace mock API client with real backend calls for agent CRUD.",
       "steps": [
-        "Rewrite `ui-web/src/lib/api.ts` — remove all mock data, replace with real fetch calls to the backend `/agents` endpoints",
-        "Keep the same method signatures: `listAgents`, `getAgent`, `getAgentName`",
+        "Rewrite `ui-web/src/lib/api.ts` — remove all MOCK_AGENTS, replace with real fetch calls to backend `/agents` endpoints",
+        "Keep same method signatures: `listAgents`, `getAgent`, `getAgentName`",
         "Add `createAgent(data)`, `updateAgent(id, data)`, `deleteAgent(id)` methods",
+        "Update `Agent` interface in `types.ts`: remove voice fields, add `source` field with AgentSource type",
         "Ensure error handling matches existing patterns"
       ],
-      "files": ["ui-web/src/lib/api.ts"],
+      "files": ["ui-web/src/lib/api.ts", "ui-web/src/lib/types.ts"],
       "verify": "cd ui-web && npx tsc --noEmit --pretty 2>&1 | head -20",
       "done": false
     },
     {
-      "id": 6,
+      "id": 7,
       "phase": 3,
       "description": "Add Create/Edit Agent dialog to the Agents page.",
       "steps": [
         "Create `ui-web/src/components/agents/agent-form-dialog.tsx` — modal form for creating/editing agents",
-        "Fields: name, description, instructions (textarea), category (select), color (preset picker), icon, LLM model, voice config",
+        "Fields: name, description, instructions (textarea), category (select from AGENT_CATEGORIES), color (preset color picker from AGENT_CARD_COLORS), icon, source (select: mastra/livekit/external), LLM model",
         "Reuse existing shadcn Dialog, Input, Select, Textarea components",
         "Wire 'Create Agent' button on agents page to open the dialog",
         "On submit: call `api.createAgent()` or `api.updateAgent()`, refresh the agent list",
@@ -99,7 +116,7 @@
       "done": false
     },
     {
-      "id": 7,
+      "id": 8,
       "phase": 3,
       "description": "Add delete agent functionality with confirmation.",
       "steps": [
@@ -113,29 +130,32 @@
       "done": false
     },
     {
-      "id": 8,
+      "id": 9,
       "phase": 4,
-      "description": "Make arena setup Step 1 functional — fetch real agents and allow selection.",
+      "description": "Create AgentPicker component (modeled after voice project) and wire into arena setup Step 1.",
       "steps": [
-        "In `ui-web/src/app/arena/page.tsx` Step 1, fetch agents from `api.listAgents()` on mount",
-        "For 'agents' config mode: render selectable agent cards from the real agent list",
-        "Track selected agents in state as `selectedAgents: Agent[]`",
-        "For 'manual' config mode: allow typing agent name + instructions (existing UI shell)",
-        "Require at least 2 agents selected to proceed to Step 2",
-        "In `handleStartConversation`: pass selected agents as `nativeAgents` with `name` and `instructions` to `createSession()`"
+        "Create `ui-web/src/components/arena/agent-picker.tsx` — based on voice project's AgentPicker",
+        "Fetch agents from `api.listAgents()` on mount",
+        "Toggle-select UI: checkbox + agent info (name, color, description, category), max 4 agents",
+        "Show selected count indicator",
+        "In `ui-web/src/app/arena/page.tsx` Step 1: replace empty placeholder with AgentPicker for 'agents' config mode",
+        "For 'manual' config mode: add simple inline form for name + instructions (no voice for now)",
+        "Track selection in state as `selectedAgents: Agent[]`",
+        "In `handleStartConversation`: pass selected agents as `nativeAgents` array with `name` and `instructions` to `createSession()`",
+        "Require at least 2 agents selected to proceed"
       ],
-      "files": ["ui-web/src/app/arena/page.tsx"],
+      "files": ["ui-web/src/components/arena/agent-picker.tsx", "ui-web/src/app/arena/page.tsx"],
       "verify": "cd ui-web && npx tsc --noEmit --pretty 2>&1 | head -20",
       "done": false
     },
     {
-      "id": 9,
+      "id": 10,
       "phase": 5,
-      "description": "Create a seed script that populates the database with default test agents.",
+      "description": "Create seed script with default test agents.",
       "steps": [
         "Create `mastra/src/scripts/seed.ts`",
-        "Insert 4 agents: Atlas (technical/research), Nova (creative), Sage (conversational), Debate Bot (debate/argumentation)",
-        "Each agent has meaningful instructions, category, color, icon",
+        "Insert 4 agents: Atlas (technical, source:mastra), Nova (creative, source:mastra), Sage (conversational, source:mastra), Debate Bot (debate, source:mastra)",
+        "Each agent has meaningful instructions, category, color, icon, llm_model",
         "Add `seed` script to `mastra/package.json`: `tsx src/scripts/seed.ts`",
         "Ensure idempotent — skip if agents with same names exist"
       ],
@@ -144,18 +164,19 @@
       "done": false
     },
     {
-      "id": 10,
+      "id": 11,
       "phase": 5,
-      "description": "Add PostgreSQL to docker-compose.staging.yml and update env examples.",
+      "description": "Add PostgreSQL and Mastra service to docker-compose for dev and staging.",
       "steps": [
-        "Add `postgres` service to `docker-compose.staging.yml`: image postgres:16-alpine, volume for data, env for POSTGRES_DB/USER/PASSWORD",
-        "Add `mastra` service to `docker-compose.staging.yml`: build from `mastra/`, depends_on postgres, DATABASE_URL pointing to the postgres service",
-        "Update `backend` service: add `MASTRA_URL=http://mastra:4111` environment",
-        "Update `.env.staging.example` with DATABASE_URL and MASTRA_URL",
-        "Create `mastra/Dockerfile`"
+        "Create `docker-compose.dev.yml` — postgres service only (for local dev): image postgres:16-alpine, port 5432, volume, env vars",
+        "Add `postgres` service to `docker-compose.staging.yml`: image postgres:16-alpine, volume, POSTGRES_DB/USER/PASSWORD",
+        "Create `mastra/Dockerfile`",
+        "Add `mastra` service to `docker-compose.staging.yml`: build from `mastra/`, depends_on postgres, DATABASE_URL pointing to postgres service",
+        "Update `backend` service in staging compose: add `MASTRA_URL=http://mastra:4111`",
+        "Update `.env.staging.example` with DATABASE_URL and MASTRA_URL"
       ],
-      "files": ["docker-compose.staging.yml", ".env.staging.example", "mastra/Dockerfile"],
-      "verify": "docker compose -f docker-compose.staging.yml config 2>&1 | head -5",
+      "files": ["docker-compose.dev.yml", "docker-compose.staging.yml", ".env.staging.example", "mastra/Dockerfile"],
+      "verify": "docker compose -f docker-compose.dev.yml config 2>&1 | head -5",
       "done": false
     }
   ]
