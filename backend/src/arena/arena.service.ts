@@ -121,6 +121,15 @@ export class ArenaService {
     }
   }
 
+  validateCanStart(sessionId: string): void {
+    const session = this.getSession(sessionId);
+    if (session.status !== 'waiting') {
+      throw new BadRequestException(
+        `Session ${sessionId} is not in 'waiting' status`,
+      );
+    }
+  }
+
   startSession(sessionId: string, roomName: string): void {
     const session = this.getSession(sessionId);
     if (session.status !== 'waiting') {

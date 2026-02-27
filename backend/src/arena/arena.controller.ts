@@ -28,6 +28,8 @@ export class ArenaController {
   @Post('sessions/:id/start')
   async startSession(@Param('id') id: string) {
     const session = this.arenaService.getSession(id);
+    // Validate status before creating room to prevent orphan LiveKit rooms on double-click
+    this.arenaService.validateCanStart(id);
     const result = await this.livekitService.generateArenaToken(session);
     this.arenaService.startSession(id, result.roomName);
     this.arenaGateway.broadcastSessionStarted(id, result.roomName);
