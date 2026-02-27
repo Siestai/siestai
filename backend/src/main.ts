@@ -1,5 +1,6 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
+import { WsAdapter } from '@nestjs/platform-ws';
 import { json } from 'express';
 import { AppModule } from './app.module';
 
@@ -18,6 +19,8 @@ async function bootstrap() {
   app.useGlobalPipes(
     new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }),
   );
+
+  app.useWebSocketAdapter(new WsAdapter(app));
 
   await app.listen(process.env.PORT ?? 4200);
 }
