@@ -1,0 +1,202 @@
+{
+  "title": "Arena LiveKit Live Session",
+  "plan": "records/plans/0002-arena-livekit-live-session.md",
+  "tasks": [
+    {
+      "id": 1,
+      "phase": 1,
+      "description": "Fix frontend .env.local to use the actual LiveKit Cloud URL instead of placeholder, so LiveKitRoom can connect.",
+      "steps": [
+        "Update `ui-web/.env.local` — change `NEXT_PUBLIC_LIVEKIT_URL=wss://your-project.livekit.cloud` to `NEXT_PUBLIC_LIVEKIT_URL=wss://siestai-qk2c7bgk.livekit.cloud`"
+      ],
+      "files": ["ui-web/.env.local"],
+      "verify": "grep 'siestai-qk2c7bgk' ui-web/.env.local",
+      "done": false
+    },
+    {
+      "id": 2,
+      "phase": 1,
+      "description": "Add ArenaLiveState type to the shared types file. Reuse existing TokenResponse from livekit.ts for the API response (same shape). Also extend ArenaWsServerMessage system variant to include 'session_started' event.",
+      "steps": [
+        "Add `ArenaLiveState` interface to `ui-web/src/lib/types.ts` with fields: `roomName: string`, `token: string`, `serverUrl: string`",
+        "Extend the `ArenaWsServerMessage` union's `system` type variant: change `event: 'participant_joined' | 'participant_left'` to `event: 'participant_joined' | 'participant_left' | 'session_started'`",
+        "Add optional `roomName?: string` to the system variant (only present for session_started)"
+      ],
+      "files": ["ui-web/src/lib/types.ts"],
+      "verify": "cd ui-web && npx tsc --noEmit --pretty 2>&1 | head -20",
+      "done": false
+    },
+    {
+      "id": 3,
+      "phase": 2,
+      "description": "Add RoomServiceClient to LivekitService and create generateArenaToken method that creates a LiveKit room with arena metadata and returns a participant JWT.",
+      "steps": [
+        "Import `RoomServiceClient` from `livekit-server-sdk` in `backend/src/livekit/livekit.service.ts`",
+        "Add a `private roomService: RoomServiceClient` field, initialize it in constructor by converting LIVEKIT_URL from `wss://` to `https://` (pattern: `.replace('wss://', 'https://').replace('ws://', 'http://')`)",
+        "Add `generateArenaToken(session: ArenaSession)` method that: (1) generates room name `arena-{random-8-chars}`, (2) generates identity `user-{random-8-chars}`, (3) builds metadata JSON `{ type: 'arena', agents: session.participants.filter(p => p.type === 'native_agent').map(p => ({ name: p.name, instructions: p.instructions || '' })), mode: session.mode, topic: session.topic, participationMode: session.participationMode }`, (4) validates metadata < 60KB, (5) calls `this.roomService.createRoom({ name: roomName, metadata: metadataJson })`, (6) creates AccessToken with `canPublish: session.participationMode === 'human_collab'`, `canPublishData: true`, `canSubscribe: true`, and RoomConfiguration with agent dispatch",
+        "Import ArenaSession type from `../arena/arena.interfaces`",
+        "Export LivekitService from LivekitModule so ArenaModule can import it — add `exports: [LivekitService]` to `livekit.module.ts`"
+      ],
+      "files": [
+        "backend/src/livekit/livekit.service.ts",
+        "backend/src/livekit/livekit.module.ts"
+      ],
+      "verify": "cd backend && npx tsc --noEmit --pretty 2>&1 | head -20",
+      "done": false
+    },
+    {
+      "id": 4,
+      "phase": 2,
+      "description": "Add startSession method to ArenaService that transitions session to 'active' and stores the LiveKit room name.",
+      "steps": [
+        "Add optional `roomName?: string` field to `ArenaSession` interface in `backend/src/arena/arena.interfaces.ts`",
+        "Add `startSession(sessionId: string, roomName: string)` method to ArenaService — validates session exists and status is 'waiting', sets status to 'active', stores roomName",
+        "Throw BadRequestException if session is not in 'waiting' status"
+      ],
+      "files": [
+        "backend/src/arena/arena.service.ts",
+        "backend/src/arena/arena.interfaces.ts"
+      ],
+      "verify": "cd backend && npx tsc --noEmit --pretty 2>&1 | head -20",
+      "done": false
+    },
+    {
+      "id": 5,
+      "phase": 3,
+      "description": "Add POST /arena/sessions/:id/start endpoint that creates a LiveKit room and returns connection details to the host.",
+      "steps": [
+        "Import LivekitModule into ArenaModule (`imports: [LivekitModule]`) so LivekitService is available for injection",
+        "Inject `LivekitService` into ArenaController constructor alongside existing ArenaService and InvitationService",
+        "Add `@Post('sessions/:id/start')` handler to `backend/src/arena/arena.controller.ts`",
+        "Handler: (1) calls `arenaService.getSession(id)` to validate session exists, (2) calls `livekitService.generateArenaToken(session)` to create room + token, (3) calls `arenaService.startSession(id, result.roomName)` to mark session as active, (4) returns `{ token: result.token, serverUrl: result.serverUrl, roomName: result.roomName }`"
+      ],
+      "files": [
+        "backend/src/arena/arena.controller.ts",
+        "backend/src/arena/arena.module.ts"
+      ],
+      "verify": "cd backend && npx tsc --noEmit --pretty 2>&1 | head -20",
+      "done": false
+    },
+    {
+      "id": 6,
+      "phase": 3,
+      "description": "Add fetchArenaToken function to frontend LiveKit utilities that calls the start endpoint.",
+      "steps": [
+        "Add `fetchArenaToken(sessionId: string): Promise<TokenResponse>` to `ui-web/src/lib/livekit.ts`",
+        "Calls `POST ${API_URL}/arena/sessions/${sessionId}/start`",
+        "Reuse existing `TokenResponse` type (already has token, serverUrl, roomName)"
+      ],
+      "files": ["ui-web/src/lib/livekit.ts"],
+      "verify": "cd ui-web && npx tsc --noEmit --pretty 2>&1 | head -20",
+      "done": false
+    },
+    {
+      "id": 7,
+      "phase": 4,
+      "description": "Extend ArenaSessionContext to manage LiveKit connection state (token, serverUrl, roomName) alongside the existing WebSocket state.",
+      "steps": [
+        "Import `ArenaLiveState` from types and `fetchArenaToken` from livekit",
+        "Add `liveState: ArenaLiveState | null` state to the provider",
+        "Add `liveState` to the context value interface",
+        "Add `startCall: () => Promise<void>` method: checks `session` is non-null, calls `fetchArenaToken(session.id)`, stores `{ roomName, token, serverUrl }` in `liveState`",
+        "Add `startCall` to the context value",
+        "Keep existing WebSocket connection alive when startCall is invoked — it's used for invitation coordination and external agent text relay",
+        "Clear `liveState` to null in `endSession`",
+        "Handle `session_started` event in WS onmessage switch — just log for now, add to existing `system` case"
+      ],
+      "files": ["ui-web/src/lib/arena-session-context.tsx"],
+      "verify": "cd ui-web && npx tsc --noEmit --pretty 2>&1 | head -20",
+      "done": false
+    },
+    {
+      "id": 8,
+      "phase": 5,
+      "description": "Create ArenaRoom component that renders participant tiles inside a LiveKitRoom context with audio playback, active speaker detection, and call controls.",
+      "steps": [
+        "Create `ui-web/src/components/arena/arena-room.tsx`",
+        "Props: `participants: ArenaParticipant[]`, `participationMode: ParticipationMode`, `topic?: string`, `onEndSession: () => void`",
+        "Use `useVoiceAssistant()` hook to get agent state and transcripts (same pattern as live page `ActiveSession` component at `ui-web/src/app/live/page.tsx:78`)",
+        "Use `useConversationTranscript()` hook from `ui-web/src/hooks/use-conversation-transcript.ts` for transcript messages",
+        "Parse agent transcript messages for `[AgentName]: text` prefix to detect active speaker — extract speaker name via regex `/^\\[([^\\]]+)\\]:/`",
+        "Render native agent tiles as a responsive grid — highlight the active speaker's tile with speaking ring animation (copy ring CSS pattern from ExternalParticipantTile)",
+        "Render a 'You' tile when participationMode is 'human_collab' showing mic status via `useLocalParticipant()`",
+        "Include `<RoomAudioRenderer />` from `@livekit/components-react` for audio playback",
+        "Include `CallTimer` from `@/components/live/call-timer` for duration display",
+        "Include 'End Session' button calling `onEndSession`"
+      ],
+      "files": ["ui-web/src/components/arena/arena-room.tsx"],
+      "verify": "cd ui-web && npx tsc --noEmit --pretty 2>&1 | head -20",
+      "done": false
+    },
+    {
+      "id": 9,
+      "phase": 5,
+      "description": "Create a transcript sidebar for the arena that shows messages attributed to each agent persona with colored names.",
+      "steps": [
+        "Create `ui-web/src/components/arena/arena-transcript.tsx`",
+        "Props: `participants: ArenaParticipant[]` (for name→color mapping), `messages: TranscriptMessage[]`, `isOpen: boolean`, `onToggle: () => void`",
+        "Parse `[AgentName]: text` format from each message.text — extract speaker name, look up color from participants array by name match",
+        "Display each message with a colored dot and agent name header, then the message text",
+        "User messages (sender === 'user') show as 'You' with cyan accent",
+        "Collapsible sidebar toggled by `isOpen` prop (same layout pattern as `ui-web/src/components/live/transcript-sidebar.tsx`)",
+        "Auto-scroll to bottom on new messages using a ref and useEffect"
+      ],
+      "files": ["ui-web/src/components/arena/arena-transcript.tsx"],
+      "verify": "cd ui-web && npx tsc --noEmit --pretty 2>&1 | head -20",
+      "done": false
+    },
+    {
+      "id": 10,
+      "phase": 6,
+      "description": "Wire the arena page's 'live' state to mount LiveKitRoom with the arena token and render ArenaRoom inside it.",
+      "steps": [
+        "In `ui-web/src/app/arena/page.tsx`, update `handleStartCall` to: `setPageState('live')` then call `await arenaSession.startCall()` — wrap in try/catch, revert to 'waiting' on failure",
+        "Replace the static 'live' state JSX (lines 533-602) with a conditional: if `arenaSession.liveState` is null, show a connecting spinner; if non-null, render `<LiveKitRoom>` wrapper",
+        "LiveKitRoom props: `serverUrl={arenaSession.liveState.serverUrl}`, `token={arenaSession.liveState.token}`, `...ROOM_OPTIONS`, `connect={true}`",
+        "Inside LiveKitRoom, render `<ArenaRoom participants={arenaSession.participants} participationMode={participationMode} topic={topic} onEndSession={handleEndSession} />`",
+        "Import `LiveKitRoom` from `@livekit/components-react`, `ROOM_OPTIONS` from `@/lib/livekit`, `ArenaRoom` from `@/components/arena/arena-room`",
+        "Import `@livekit/components-styles` at top of file",
+        "Keep 'End Session' functionality — calls `handleEndSession` which already calls `arenaSession.endSession()` and sets pageState to 'ended'"
+      ],
+      "files": ["ui-web/src/app/arena/page.tsx"],
+      "verify": "cd ui-web && npx tsc --noEmit --pretty 2>&1 | head -20",
+      "done": false
+    },
+    {
+      "id": 11,
+      "phase": 7,
+      "description": "Extend the siestai-agent to read arena room metadata and orchestrate multi-persona conversations with speaker attribution.",
+      "steps": [
+        "Create `agent/src/arena-agent.ts` extending `voice.Agent`",
+        "Constructor accepts `agents: { name: string, instructions: string }[]`, `mode: string`, `topic?: string`, `participationMode: string`",
+        "Build system instructions that: (1) list all persona names and their instructions, (2) require the LLM to prefix every response with `[PersonaName]: ` for speaker attribution, (3) for 'group' mode + human_collab: instruct personas to respond naturally to user input, switching between personas based on relevance, (4) for 'agent_only': instruct personas to simulate a multi-turn discussion on the topic, alternating speakers",
+        "In `agent/src/main.ts`, after `ctx.connect()` and before `session.start()`, read `ctx.room.metadata` — if it exists, parse as JSON",
+        "If `metadata.type === 'arena'`, construct `new ArenaAgent(metadata.agents, metadata.mode, metadata.topic, metadata.participationMode)` instead of `new Agent()`",
+        "For agent_only mode, use `session.generateReply()` with instructions to begin the discussion on the topic instead of greeting the user"
+      ],
+      "files": [
+        "agent/src/arena-agent.ts",
+        "agent/src/main.ts"
+      ],
+      "verify": "cd agent && npx tsc --noEmit --pretty 2>&1 | head -20",
+      "done": false
+    },
+    {
+      "id": 12,
+      "phase": 8,
+      "description": "Add broadcastSessionStarted method to ArenaGateway and call it when the host starts the call, so WebSocket-connected clients know the session is live.",
+      "steps": [
+        "Add a public `broadcastSessionStarted(sessionId: string, roomName: string)` method to ArenaGateway that broadcasts `{ type: 'system', event: 'session_started', roomName }` to all connected WebSocket clients in that session",
+        "Inject ArenaGateway into ArenaController (it's already registered as a provider in ArenaModule)",
+        "Call `arenaGateway.broadcastSessionStarted(id, roomName)` from the start endpoint handler after successful room creation",
+        "In frontend `arena-session-context.tsx`, the `session_started` event is already handled by task 7's system case extension — no additional frontend work needed here"
+      ],
+      "files": [
+        "backend/src/arena/arena.gateway.ts",
+        "backend/src/arena/arena.controller.ts"
+      ],
+      "verify": "cd backend && npx tsc --noEmit --pretty 2>&1 | head -20",
+      "done": false
+    }
+  ]
+}
