@@ -14,10 +14,13 @@ import {
   RotateCcw,
   Clock,
 } from "lucide-react";
+import "@livekit/components-styles";
+import { LiveKitRoom } from "@livekit/components-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
+import { ROOM_OPTIONS } from "@/lib/livekit";
 import type { ParticipationMode } from "@/lib/types";
 import {
   ArenaSessionProvider,
@@ -25,6 +28,7 @@ import {
 } from "@/lib/arena-session-context";
 import { InviteLinkPanel } from "@/components/arena/invite-link-panel";
 import { ExternalParticipantTile } from "@/components/arena/external-participant-tile";
+import { ArenaRoom } from "@/components/arena/arena-room";
 
 type PageState = "setup" | "waiting" | "live" | "ended";
 
@@ -81,8 +85,14 @@ function ArenaPageContent() {
     }
   };
 
-  const handleStartCall = () => {
+  const handleStartCall = async () => {
     setPageState("live");
+    try {
+      await arenaSession.startCall();
+    } catch (err) {
+      console.error("Failed to start arena call:", err);
+      setPageState("waiting");
+    }
   };
 
   const handleEndSession = () => {
@@ -531,73 +541,38 @@ function ArenaPageContent() {
 
   // --- Live arena ---
   if (pageState === "live") {
-    return (
-      <div className="container mx-auto px-4 py-6 lg:px-6 lg:py-8">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-8">
-          <div>
-            <h1 className="text-2xl font-semibold text-foreground">
-              Arena — Live
-            </h1>
-            <p className="text-muted-foreground mt-1">
-              {arenaSession.session?.topic || "Free-form discussion"}
+    if (!arenaSession.liveState) {
+      return (
+        <div className="container mx-auto px-4 py-6 lg:px-6 lg:py-8">
+          <div className="flex flex-col items-center justify-center min-h-[400px] gap-4">
+            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            <p className="text-muted-foreground">
+              Connecting to arena room...
             </p>
           </div>
-          <Button
-            variant="destructive"
-            size="sm"
-            onClick={handleEndSession}
-            className="w-fit"
-          >
-            End Session
-          </Button>
         </div>
+      );
+    }
 
-        {/* Participant grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {/* Native agent tiles (placeholder — LiveKit room would go here) */}
-          {arenaSession.participants
-            .filter((p) => p.type === "native_agent")
-            .map((p) => (
-              <div
-                key={p.id}
-                className="flex flex-col items-center justify-center gap-3 rounded-xl border border-border/50 bg-card/30 p-6 min-h-[200px]"
-              >
-                <div
-                  className="flex items-center justify-center rounded-full w-16 h-16"
-                  style={{ backgroundColor: `${p.color}30` }}
-                >
-                  <Bot className="h-7 w-7" style={{ color: p.color }} />
-                </div>
-                <span className="text-sm font-semibold">{p.name}</span>
-                <span className="text-xs text-muted-foreground">
-                  Native Agent
-                </span>
-              </div>
-            ))}
-
-          {/* External agent tiles */}
-          {externalParticipants.map((p) => (
-            <ExternalParticipantTile
-              key={p.id}
-              name={p.name}
-              color={p.color}
-              platform={p.platform}
-              status={p.status}
-              isSpeaking={false}
-            />
-          ))}
-        </div>
-
-        {externalParticipants.length === 0 &&
-          arenaSession.participants.filter((p) => p.type === "native_agent")
-            .length === 0 && (
-            <div className="flex flex-col items-center justify-center py-16 text-center">
-              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground mb-4" />
-              <p className="text-muted-foreground">
-                Waiting for participants...
-              </p>
-            </div>
-          )}
+    return (
+      <div className="container mx-auto px-4 py-6 lg:px-6 lg:py-8">
+        <LiveKitRoom
+          serverUrl={arenaSession.liveState.serverUrl}
+          token={arenaSession.liveState.token}
+          connect={true}
+          audio={participationMode === "human_collab"}
+          options={ROOM_OPTIONS}
+          onError={(err) => {
+            console.error("LiveKitRoom error:", err);
+          }}
+        >
+          <ArenaRoom
+            participants={arenaSession.participants}
+            participationMode={participationMode}
+            topic={topic}
+            onEndSession={handleEndSession}
+          />
+        </LiveKitRoom>
       </div>
     );
   }
