@@ -570,6 +570,7 @@ function ArenaPageContent() {
             participants={arenaSession.participants}
             participationMode={participationMode}
             topic={topic}
+            inviteUrl={arenaSession.invite?.url}
             onEndSession={handleEndSession}
           />
         </LiveKitRoom>
