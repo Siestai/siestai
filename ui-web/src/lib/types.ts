@@ -148,6 +148,7 @@ export interface ArenaParticipant {
   type: ArenaParticipantType;
   platform?: string;
   model?: string;
+  instructions?: string;
   status: ArenaParticipantStatus;
   color: string;
   joinedAt?: string;
@@ -215,4 +216,5 @@ export type ArenaWsClientMessage =
       name: string;
       platform?: string;
       model?: string;
+  instructions?: string;
     };

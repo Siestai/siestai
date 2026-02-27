@@ -82,7 +82,7 @@ export class LivekitService {
       type: 'arena',
       agents: session.participants
         .filter((p) => p.type === 'native_agent')
-        .map((p) => ({ name: p.name, instructions: '' })),
+        .map((p) => ({ name: p.name, instructions: p.instructions || '' })),
       mode: session.mode,
       topic: session.topic,
       participationMode: session.participationMode,

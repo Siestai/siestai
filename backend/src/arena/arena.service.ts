@@ -41,6 +41,7 @@ export class ArenaService {
         id: uuidv4(),
         name: agent.name,
         type: 'native_agent' as const,
+        instructions: agent.instructions,
         status: 'invited' as const,
         color: AGENT_COLORS[i % AGENT_COLORS.length],
       }),
