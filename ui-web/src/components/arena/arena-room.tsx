@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
-import { User, Mic, MicOff, PhoneOff } from "lucide-react";
+import { User, Mic, MicOff, PhoneOff, Link, Check } from "lucide-react";
 import {
   RoomAudioRenderer,
   useVoiceAssistant,
@@ -20,6 +20,7 @@ interface ArenaRoomProps {
   participants: ArenaParticipant[];
   participationMode: ParticipationMode;
   topic?: string;
+  inviteUrl?: string;
   onEndSession: () => void;
 }
 
@@ -224,6 +225,7 @@ export function ArenaRoom({
   participants,
   participationMode,
   topic,
+  inviteUrl,
   onEndSession,
 }: ArenaRoomProps) {
   const { state: agentState } = useVoiceAssistant();
@@ -233,6 +235,14 @@ export function ArenaRoom({
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const prevCountRef = useRef(messages.length);
+  const [copied, setCopied] = useState(false);
+
+  const handleCopyInvite = useCallback(async () => {
+    if (!inviteUrl) return;
+    await navigator.clipboard.writeText(inviteUrl);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }, [inviteUrl]);
 
   const nativeAgents = useMemo(
     () => participants.filter((p) => p.type === "native_agent"),
@@ -271,6 +281,26 @@ export function ArenaRoom({
             <span className="text-sm text-muted-foreground truncate max-w-xs">
               {topic}
             </span>
+          )}
+          {inviteUrl && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleCopyInvite}
+              className="gap-1.5 text-xs text-muted-foreground h-7 px-2"
+            >
+              {copied ? (
+                <>
+                  <Check className="h-3 w-3 text-green-400" />
+                  Copied!
+                </>
+              ) : (
+                <>
+                  <Link className="h-3 w-3" />
+                  Copy Invite Link
+                </>
+              )}
+            </Button>
           )}
         </div>
 
