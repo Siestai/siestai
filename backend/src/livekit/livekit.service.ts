@@ -1,12 +1,25 @@
 import { Injectable, InternalServerErrorException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { AccessToken } from 'livekit-server-sdk';
+import { AccessToken, RoomServiceClient } from 'livekit-server-sdk';
 import { RoomAgentDispatch, RoomConfiguration } from '@livekit/protocol';
 import { CreateTokenDto } from './dto/create-token.dto';
+// TODO: Consider moving ArenaSession to a shared types folder if more cross-module deps emerge
+import { ArenaSession } from '../arena/arena.interfaces';
+import { randomBytes } from 'crypto';
 
 @Injectable()
 export class LivekitService {
-  constructor(private readonly configService: ConfigService) {}
+  private roomService: RoomServiceClient;
+
+  constructor(private readonly configService: ConfigService) {
+    const url = this.configService.get<string>('LIVEKIT_URL') || '';
+    const httpUrl = url
+      .replace('wss://', 'https://')
+      .replace('ws://', 'http://');
+    const apiKey = this.configService.get<string>('LIVEKIT_API_KEY') || '';
+    const apiSecret = this.configService.get<string>('LIVEKIT_API_SECRET') || '';
+    this.roomService = new RoomServiceClient(httpUrl, apiKey, apiSecret);
+  }
 
   /** Strip characters that aren't alphanumeric, hyphens, or underscores. */
   private sanitize(value: string): string {
@@ -37,6 +50,59 @@ export class LivekitService {
       room: roomName,
       roomJoin: true,
       canPublish: true,
+      canSubscribe: true,
+      canPublishData: true,
+    });
+
+    at.roomConfig = new RoomConfiguration({
+      agents: [new RoomAgentDispatch({ agentName: 'siestai-agent' })],
+    });
+
+    return {
+      token: await at.toJwt(),
+      serverUrl,
+      roomName,
+    };
+  }
+
+  async generateArenaToken(
+    session: ArenaSession,
+  ): Promise<{ token: string; serverUrl: string; roomName: string }> {
+    const apiKey = this.configService.get<string>('LIVEKIT_API_KEY');
+    const apiSecret = this.configService.get<string>('LIVEKIT_API_SECRET');
+    const serverUrl = this.configService.get<string>('LIVEKIT_URL');
+
+    if (!apiKey || !apiSecret || !serverUrl) {
+      throw new InternalServerErrorException('LiveKit not configured');
+    }
+
+    const roomName = `arena-${randomBytes(4).toString('hex')}`;
+    const identity = `user-${randomBytes(4).toString('hex')}`;
+
+    const metadata = JSON.stringify({
+      type: 'arena',
+      agents: session.participants
+        .filter((p) => p.type === 'native_agent')
+        .map((p) => ({ name: p.name, instructions: p.instructions || '' })),
+      mode: session.mode,
+      topic: session.topic,
+      participationMode: session.participationMode,
+    });
+
+    if (Buffer.byteLength(metadata, 'utf8') > 60 * 1024) {
+      throw new InternalServerErrorException(
+        'Arena room metadata exceeds 60KB limit',
+      );
+    }
+
+    await this.roomService.createRoom({ name: roomName, metadata });
+
+    const at = new AccessToken(apiKey, apiSecret, { identity });
+
+    at.addGrant({
+      room: roomName,
+      roomJoin: true,
+      canPublish: session.participationMode === 'human_collab',
       canSubscribe: true,
       canPublishData: true,
     });

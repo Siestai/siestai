@@ -11,6 +11,7 @@ import {
 } from "react";
 import type {
   ArenaInvite,
+  ArenaLiveState,
   ArenaParticipant,
   ArenaSession,
   ArenaWsServerMessage,
@@ -20,6 +21,7 @@ import {
   buildWsUrl,
   type CreateArenaSessionParams,
 } from "./arena-api";
+import { fetchArenaToken } from "./livekit";
 
 type ConnectionStatus = "disconnected" | "connecting" | "connected";
 
@@ -28,8 +30,10 @@ interface ArenaSessionContextValue {
   invite: ArenaInvite | null;
   participants: ArenaParticipant[];
   connectionStatus: ConnectionStatus;
+  liveState: ArenaLiveState | null;
   createSession: (params: CreateArenaSessionParams) => Promise<void>;
   startListening: () => void;
+  startCall: () => Promise<void>;
   endSession: () => void;
 }
 
@@ -42,6 +46,7 @@ export function ArenaSessionProvider({ children }: { children: ReactNode }) {
   const [participants, setParticipants] = useState<ArenaParticipant[]>([]);
   const [connectionStatus, setConnectionStatus] =
     useState<ConnectionStatus>("disconnected");
+  const [liveState, setLiveState] = useState<ArenaLiveState | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
 
   const cleanup = useCallback(() => {
@@ -97,6 +102,8 @@ export function ArenaSessionProvider({ children }: { children: ReactNode }) {
                   : p,
               ),
             );
+          } else if (msg.event === "session_started") {
+            console.log("[arena-ws] session_started, room:", msg.roomName);
           }
           break;
         case "session_ended":
@@ -117,12 +124,23 @@ export function ArenaSessionProvider({ children }: { children: ReactNode }) {
     };
   }, [cleanup]);
 
+  const startCall = useCallback(async () => {
+    if (!session) throw new Error("No active session");
+    const result = await fetchArenaToken(session.id);
+    setLiveState({
+      roomName: result.roomName,
+      token: result.token,
+      serverUrl: result.serverUrl,
+    });
+  }, [session]);
+
   const endSession = useCallback(() => {
     cleanup();
     setSession(null);
     setInvite(null);
     hostTokenRef.current = null;
     setParticipants([]);
+    setLiveState(null);
   }, [cleanup]);
 
   // Close WS on unmount
@@ -135,8 +153,10 @@ export function ArenaSessionProvider({ children }: { children: ReactNode }) {
         invite,
         participants,
         connectionStatus,
+        liveState,
         createSession: handleCreateSession,
         startListening,
+        startCall,
         endSession,
       }}
     >

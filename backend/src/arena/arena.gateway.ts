@@ -204,6 +204,14 @@ export class ArenaGateway
     }
   }
 
+  broadcastSessionStarted(sessionId: string, roomName: string): void {
+    this.broadcastToSession(sessionId, {
+      type: 'system',
+      event: 'session_started',
+      roomName,
+    });
+  }
+
   private broadcastToSession(
     sessionId: string,
     message: Record<string, unknown>,

@@ -5,5 +5,6 @@ import { LivekitService } from './livekit.service';
 @Module({
   controllers: [LivekitController],
   providers: [LivekitService],
+  exports: [LivekitService],
 })
 export class LivekitModule {}
