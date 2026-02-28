@@ -16,11 +16,20 @@ export class AgentsService implements OnModuleInit {
     });
   }
 
-  async listAgents(params?: { category?: string; search?: string }) {
+  async listAgents(params?: {
+    category?: string;
+    search?: string;
+    userId?: string;
+  }) {
     const conditions: string[] = [];
     const values: any[] = [];
     let idx = 1;
 
+    if (params?.userId) {
+      conditions.push(`(user_id = $${idx} OR user_id IS NULL)`);
+      values.push(params.userId);
+      idx++;
+    }
     if (params?.category) {
       conditions.push(`category = $${idx++}`);
       values.push(params.category);
@@ -50,10 +59,10 @@ export class AgentsService implements OnModuleInit {
     return rows[0];
   }
 
-  async createAgent(dto: CreateAgentDto) {
+  async createAgent(dto: CreateAgentDto, userId: string) {
     const { rows } = await this.pool.query(
-      `INSERT INTO agents (name, description, instructions, category, tags, color, icon, source, llm_model)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      `INSERT INTO agents (name, description, instructions, category, tags, color, icon, source, llm_model, user_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
        RETURNING *`,
       [
         dto.name,
@@ -65,12 +74,13 @@ export class AgentsService implements OnModuleInit {
         dto.icon ?? 'bot',
         dto.source ?? 'mastra',
         dto.llmModel ?? null,
+        userId,
       ],
     );
     return rows[0];
   }
 
-  async updateAgent(id: string, dto: UpdateAgentDto) {
+  async updateAgent(id: string, dto: UpdateAgentDto, userId: string) {
     const sets: string[] = [];
     const values: any[] = [];
     let idx = 1;
@@ -100,9 +110,10 @@ export class AgentsService implements OnModuleInit {
 
     sets.push(`updated_at = now()`);
     values.push(id);
+    values.push(userId);
 
     const { rows } = await this.pool.query(
-      `UPDATE agents SET ${sets.join(', ')} WHERE id = $${idx} RETURNING *`,
+      `UPDATE agents SET ${sets.join(', ')} WHERE id = $${idx++} AND (user_id = $${idx} OR user_id IS NULL) RETURNING *`,
       values,
     );
     if (rows.length === 0) {
@@ -111,10 +122,10 @@ export class AgentsService implements OnModuleInit {
     return rows[0];
   }
 
-  async deleteAgent(id: string) {
+  async deleteAgent(id: string, userId: string) {
     const { rows } = await this.pool.query(
-      'DELETE FROM agents WHERE id = $1 RETURNING id',
-      [id],
+      'DELETE FROM agents WHERE id = $1 AND user_id = $2 RETURNING id',
+      [id, userId],
     );
     if (rows.length === 0) {
       throw new NotFoundException('Agent not found');

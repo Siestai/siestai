@@ -1,4 +1,5 @@
 import { Body, Controller, Get, Param, Post } from '@nestjs/common';
+import { AllowAnonymous } from '@thallesp/nestjs-better-auth';
 import { ArenaService } from './arena.service';
 import { InvitationService } from './invitation.service';
 import { LivekitService } from '../livekit/livekit.service';
@@ -41,6 +42,7 @@ export class ArenaController {
   }
 
   @Post('join')
+  @AllowAnonymous()
   join(@Body() dto: JoinArenaDto) {
     const { sessionId } = this.invitationService.validateInvite(dto.token);
     const participant = this.arenaService.addExternalParticipant(

@@ -1,16 +1,13 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { WsAdapter } from '@nestjs/platform-ws';
-import { json } from 'express';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, {
+    bodyParser: false,
+  });
 
-  // Limit request body size to prevent oversized payloads
-  app.use(json({ limit: '10kb' }));
-
-  // CORS allowlist — driven by FRONTEND_URL env var in production
   const allowedOrigins = [
     'http://localhost:3000',
     'http://localhost:3001',
