@@ -1,22 +1,40 @@
-FROM node:22-slim AS build
+FROM node:22-slim
+
+ENV PNPM_HOME="/pnpm"
+ENV PATH="$PNPM_HOME:$PATH"
+
+RUN apt-get update -qq \
+    && apt-get install --no-install-recommends -y ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN npm install -g pnpm@10
+
 WORKDIR /app
-RUN corepack enable && corepack prepare pnpm@latest --activate
+
 COPY package.json pnpm-lock.yaml ./
 RUN pnpm install --frozen-lockfile
+
 COPY . .
 RUN pnpm build
 
-FROM node:22-slim
-WORKDIR /app
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    libglib2.0-0 \
-    libgstreamer1.0-0 \
-    libgstreamer-plugins-base1.0-0 \
-    libsoup-3.0-0 \
-    && rm -rf /var/lib/apt/lists/*
-RUN corepack enable && corepack prepare pnpm@latest --activate
-COPY --from=build /app/package.json /app/pnpm-lock.yaml ./
-RUN pnpm install --frozen-lockfile --prod
-COPY --from=build /app/dist ./dist
+ARG UID=10001
+RUN adduser \
+    --disabled-password \
+    --gecos "" \
+    --home "/app" \
+    --shell "/sbin/nologin" \
+    --uid "${UID}" \
+    appuser
+
+RUN chown -R appuser:appuser /app
+USER appuser
+
 RUN node dist/main.js download-files
+
+USER root
+RUN pnpm prune --prod && chown -R appuser:appuser /app
+USER appuser
+
+ENV NODE_ENV=production
+
 CMD ["node", "dist/main.js", "start"]
