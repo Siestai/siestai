@@ -64,7 +64,10 @@ export default function LoginPage() {
       <div className="flex flex-col items-center gap-4 w-full max-w-[400px]">
         <button
           onClick={() =>
-            signIn.social({ provider: "google", callbackURL: "/" })
+            signIn.social({
+              provider: "google",
+              callbackURL: `${window.location.origin}/`,
+            })
           }
           className="flex items-center justify-center gap-3 w-full h-[52px] rounded-full border border-foreground/80 text-foreground font-medium transition-colors hover:bg-foreground/5"
         >
