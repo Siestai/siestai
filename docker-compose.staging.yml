@@ -19,8 +19,8 @@ services:
       context: ./mastra
       dockerfile: Dockerfile
     restart: unless-stopped
-    ports:
-      - "4111:4111"
+    expose:
+      - "4111"
     depends_on:
       postgres:
         condition: service_healthy
@@ -33,8 +33,8 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     restart: unless-stopped
-    ports:
-      - "4200:4200"
+    expose:
+      - "4200"
     depends_on:
       - mastra
     environment:
@@ -55,8 +55,10 @@ services:
         NEXT_PUBLIC_API_URL: https://api-staging.siestai.com
         NEXT_PUBLIC_LIVEKIT_URL: wss://siestai-qk2c7bgk.livekit.cloud
     restart: unless-stopped
-    ports:
-      - "3000:3000"
+    expose:
+      - "3000"
+    environment:
+      API_URL: http://backend:4200
 
   agent:
     build:
