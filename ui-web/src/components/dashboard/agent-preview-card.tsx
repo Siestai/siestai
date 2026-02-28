@@ -26,7 +26,7 @@ export function AgentPreviewCard({ agent }: AgentPreviewCardProps) {
       </div>
       <div
         className={`h-2 w-2 rounded-full ${
-          agent.is_online ? "bg-success" : "bg-muted-foreground"
+          agent.isOnline ? "bg-success" : "bg-muted-foreground"
         }`}
       />
     </Link>

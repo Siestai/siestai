@@ -7,31 +7,25 @@ import { SystemStatus } from "@/components/dashboard/system-status";
 import Link from "next/link";
 import type { Agent } from "@/lib/types";
 
-// Mock data for server component
+// Placeholder data for server component — replaced by real API calls in agents page
 const recentAgents: Agent[] = [
   {
     id: "1", name: "Atlas", description: "Research assistant", instructions: "",
     tags: ["research"], color: "#3b82f6", icon: "brain", category: "technical",
-    voice_id: null, preset_voice: "alloy", stt_provider: null, llm_provider: null,
-    tts_provider: null, tts_engine: null, tts_cloud_provider: null, llm_model: null,
-    is_online: true, voice_name: null, call_count: 24,
-    created_at: "2025-01-15T10:00:00Z", updated_at: "2025-02-20T14:30:00Z",
+    source: "mastra", llmModel: null, isOnline: true,
+    createdAt: "2025-01-15T10:00:00Z", updatedAt: "2025-02-20T14:30:00Z",
   },
   {
     id: "2", name: "Nova", description: "Creative storyteller", instructions: "",
     tags: ["creative"], color: "#8b5cf6", icon: "sparkles", category: "creative",
-    voice_id: null, preset_voice: "shimmer", stt_provider: null, llm_provider: null,
-    tts_provider: null, tts_engine: null, tts_cloud_provider: null, llm_model: null,
-    is_online: true, voice_name: null, call_count: 18,
-    created_at: "2025-01-20T08:00:00Z", updated_at: "2025-02-19T11:00:00Z",
+    source: "mastra", llmModel: null, isOnline: true,
+    createdAt: "2025-01-20T08:00:00Z", updatedAt: "2025-02-19T11:00:00Z",
   },
   {
     id: "5", name: "Cipher", description: "Coding assistant", instructions: "",
     tags: ["coding"], color: "#eab308", icon: "code", category: "technical",
-    voice_id: null, preset_voice: "fable", stt_provider: null, llm_provider: null,
-    tts_provider: null, tts_engine: null, tts_cloud_provider: null, llm_model: null,
-    is_online: true, voice_name: null, call_count: 45,
-    created_at: "2025-01-05T09:00:00Z", updated_at: "2025-02-22T10:00:00Z",
+    source: "mastra", llmModel: null, isOnline: true,
+    createdAt: "2025-01-05T09:00:00Z", updatedAt: "2025-02-22T10:00:00Z",
   },
 ];
 

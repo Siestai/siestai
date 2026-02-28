@@ -6,7 +6,7 @@ import Link from "next/link";
 import {
   ArrowLeft,
   Bot,
-  Phone,
+  MessageSquare,
   Users,
   Globe,
   Calendar,
@@ -31,8 +31,8 @@ export default function AgentDetailPage({
   useEffect(() => {
     async function loadAgent() {
       try {
-        const response = await api.getAgent(id);
-        setAgent(response.agent);
+        const data = await api.getAgent(id);
+        setAgent(data);
       } catch {
         // Agent not found
       } finally {
@@ -105,9 +105,14 @@ export default function AgentDetailPage({
               <h1 className="text-2xl font-semibold text-foreground">
                 {agent.name}
               </h1>
+              {agent.source !== "mastra" && (
+                <Badge variant="secondary" className="text-xs">
+                  {agent.source}
+                </Badge>
+              )}
               <div
                 className={`h-2.5 w-2.5 rounded-full ${
-                  agent.is_online ? "bg-success" : "bg-muted-foreground"
+                  agent.isOnline ? "bg-success" : "bg-muted-foreground"
                 }`}
               />
             </div>
@@ -148,7 +153,7 @@ export default function AgentDetailPage({
                 )
               }
             >
-              <Phone className="h-4 w-4" />
+              <MessageSquare className="h-4 w-4" />
               Start Chat
             </Button>
           </div>
@@ -176,11 +181,11 @@ export default function AgentDetailPage({
             </div>
             <div className="rounded-lg border border-border bg-card p-4">
               <div className="flex items-center gap-2 text-muted-foreground mb-1">
-                <Phone className="h-4 w-4" />
-                <span className="text-xs">Total Calls</span>
+                <Bot className="h-4 w-4" />
+                <span className="text-xs">Source</span>
               </div>
-              <p className="text-sm font-medium text-foreground">
-                {agent.call_count}
+              <p className="text-sm font-medium text-foreground capitalize">
+                {agent.source}
               </p>
             </div>
             <div className="rounded-lg border border-border bg-card p-4">
@@ -189,7 +194,7 @@ export default function AgentDetailPage({
                 <span className="text-xs">Created</span>
               </div>
               <p className="text-sm font-medium text-foreground">
-                {new Date(agent.created_at).toLocaleDateString()}
+                {new Date(agent.createdAt).toLocaleDateString()}
               </p>
             </div>
             <div className="rounded-lg border border-border bg-card p-4">
@@ -216,37 +221,19 @@ export default function AgentDetailPage({
         <TabsContent value="configuration" className="mt-6 space-y-4">
           <div className="rounded-lg border border-border bg-card p-4 space-y-3">
             <h3 className="text-sm font-medium text-foreground">
-              Provider Settings
+              Model Settings
             </h3>
             <div className="grid gap-3 sm:grid-cols-2">
               <div>
-                <p className="text-xs text-muted-foreground">LLM Provider</p>
-                <p className="text-sm text-foreground">
-                  {agent.llm_provider || "Default"}
-                </p>
-              </div>
-              <div>
                 <p className="text-xs text-muted-foreground">LLM Model</p>
                 <p className="text-sm text-foreground">
-                  {agent.llm_model || "Default"}
+                  {agent.llmModel || "Default"}
                 </p>
               </div>
               <div>
-                <p className="text-xs text-muted-foreground">TTS Provider</p>
-                <p className="text-sm text-foreground">
-                  {agent.tts_provider || "Default"}
-                </p>
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">STT Provider</p>
-                <p className="text-sm text-foreground">
-                  {agent.stt_provider || "Default"}
-                </p>
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Voice</p>
-                <p className="text-sm text-foreground">
-                  {agent.voice_name || agent.preset_voice || "None"}
+                <p className="text-xs text-muted-foreground">Source</p>
+                <p className="text-sm text-foreground capitalize">
+                  {agent.source}
                 </p>
               </div>
             </div>
@@ -255,7 +242,7 @@ export default function AgentDetailPage({
 
         <TabsContent value="history" className="mt-6">
           <div className="flex flex-col items-center justify-center py-12">
-            <Phone className="h-8 w-8 text-muted-foreground mb-3" />
+            <MessageSquare className="h-8 w-8 text-muted-foreground mb-3" />
             <p className="text-sm text-muted-foreground">
               No conversation history yet
             </p>
