@@ -168,6 +168,17 @@ Single PostgreSQL instance, database `siestai`.
 - Pipeline: Silero VAD → Deepgram STT (nova-3, multilingual) → OpenAI GPT-4.1-mini → Cartesia TTS (sonic-3)
 - Interruptions enabled (300ms min), background noise cancellation
 
+## Deployment
+
+### Staging
+
+- **Platform:** Dokploy (manages Docker Compose deployments)
+- **URL:** https://staging.siestai.com (ui-web), https://api-staging.siestai.com (backend)
+- **Compose file:** `docker-compose.staging.yml` — 5 services (postgres, mastra, backend, ui-web, agent) on a `siestai` bridge network
+- **Build:** All services use multi-stage Docker builds (node:22-alpine). ui-web uses `output: "standalone"` and receives `NEXT_PUBLIC_API_URL` / `NEXT_PUBLIC_LIVEKIT_URL` as build args.
+- **Internal networking:** Services communicate via Docker service names (e.g., `http://backend:4200`, `http://mastra:4111`). Only ui-web (:3000) and backend (:4200) are exposed externally via Dokploy reverse proxy.
+- **Env vars:** Staging secrets (API keys, DB password) are configured in Dokploy. Template: `.env.staging.example`.
+
 ## Local Development
 
 **Prerequisites:** Node >= 22 (`nvm use 22`), pnpm, Docker
@@ -219,6 +230,7 @@ make nuke     # full reset (stop + clean node_modules + destroy db)
 | Skill | Purpose |
 |-------|---------|
 | agent-browser | Playwright browser automation for e2e tasks |
+| better-auth-best-practices | Better Auth integration guidance |
 | frontend-design | Production-grade UI generation |
 | livekit-agents | LiveKit voice agent guidance |
 | vercel-composition-patterns | React composition patterns |
