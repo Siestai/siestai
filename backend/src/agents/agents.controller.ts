@@ -8,6 +8,10 @@ import {
   Put,
   Query,
 } from '@nestjs/common';
+import {
+  Session,
+  type UserSession,
+} from '@thallesp/nestjs-better-auth';
 import { AgentsService } from './agents.service';
 import { CreateAgentDto } from './dto/create-agent.dto';
 import { UpdateAgentDto } from './dto/update-agent.dto';
@@ -18,10 +22,15 @@ export class AgentsController {
 
   @Get()
   listAgents(
+    @Session() session: UserSession,
     @Query('category') category?: string,
     @Query('search') search?: string,
   ) {
-    return this.agentsService.listAgents({ category, search });
+    return this.agentsService.listAgents({
+      category,
+      search,
+      userId: session.user.id,
+    });
   }
 
   @Get(':id')
@@ -30,17 +39,21 @@ export class AgentsController {
   }
 
   @Post()
-  createAgent(@Body() dto: CreateAgentDto) {
-    return this.agentsService.createAgent(dto);
+  createAgent(@Session() session: UserSession, @Body() dto: CreateAgentDto) {
+    return this.agentsService.createAgent(dto, session.user.id);
   }
 
   @Put(':id')
-  updateAgent(@Param('id') id: string, @Body() dto: UpdateAgentDto) {
-    return this.agentsService.updateAgent(id, dto);
+  updateAgent(
+    @Session() session: UserSession,
+    @Param('id') id: string,
+    @Body() dto: UpdateAgentDto,
+  ) {
+    return this.agentsService.updateAgent(id, dto, session.user.id);
   }
 
   @Delete(':id')
-  deleteAgent(@Param('id') id: string) {
-    return this.agentsService.deleteAgent(id);
+  deleteAgent(@Session() session: UserSession, @Param('id') id: string) {
+    return this.agentsService.deleteAgent(id, session.user.id);
   }
 }

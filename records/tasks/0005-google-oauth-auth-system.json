@@ -1,0 +1,279 @@
+{
+  "title": "Google OAuth Auth System with Better Auth",
+  "plan": "records/plans/0005-google-oauth-auth-system.md",
+  "tasks": [
+    {
+      "id": 1,
+      "phase": 1,
+      "description": "Install Better Auth + nestjs-better-auth packages in backend and configure the auth instance with Google OAuth and Drizzle adapter",
+      "steps": [
+        "Run `cd backend && pnpm add better-auth @thallesp/nestjs-better-auth drizzle-orm` to install all auth packages",
+        "Create `backend/src/auth/auth.ts` — export a `betterAuth()` instance configured with: socialProviders.google (clientId/clientSecret from ConfigService or process.env), drizzleAdapter(db, { provider: 'pg' }) using a new Drizzle instance from a pg Pool, trustedOrigins: [process.env.FRONTEND_URL || 'http://localhost:3000'], basePath: '/api/auth'",
+        "The Drizzle instance in auth.ts is ONLY for Better Auth — the rest of the backend continues using raw pg Pool queries",
+        "Add GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, BETTER_AUTH_SECRET, BETTER_AUTH_URL to `backend/.env.example` and `backend/.env`"
+      ],
+      "files": [
+        "backend/src/auth/auth.ts",
+        "backend/package.json",
+        "backend/.env.example",
+        "backend/.env"
+      ],
+      "verify": "cd backend && pnpm build",
+      "done": true
+    },
+    {
+      "id": 2,
+      "phase": 1,
+      "description": "Generate Better Auth database schema and add it to the Drizzle schema file alongside existing agents table",
+      "steps": [
+        "Run `cd backend && npx @better-auth/cli@latest generate --config ./src/auth/auth.ts --output ./generated-auth-schema.ts` to generate the Drizzle schema for user/session/account/verification tables",
+        "Read the generated file and merge the table definitions (user, session, account, verification) into `mastra/src/db/schema.ts` alongside the existing agents pgTable",
+        "Ensure the user table id is `text` type (Better Auth default for Postgres) — do NOT change it to uuid",
+        "Delete the generated temp file after merging",
+        "Run `cd mastra && pnpm run generate` to create migration SQL",
+        "Run `cd mastra && pnpm run migrate` to apply the migration and create the tables"
+      ],
+      "files": [
+        "mastra/src/db/schema.ts",
+        "mastra/drizzle/"
+      ],
+      "verify": "cd mastra && pnpm run migrate",
+      "done": true
+    },
+    {
+      "id": 3,
+      "phase": 1,
+      "description": "Add user_id FK column to agents table so agents can be owned by users",
+      "steps": [
+        "In `mastra/src/db/schema.ts`, add `userId: text('user_id').references(() => user.id)` to the agents table (nullable — existing agents have no owner)",
+        "Run `cd mastra && pnpm run generate` to create the ALTER TABLE migration SQL",
+        "Review the generated migration SQL to confirm it adds a nullable user_id column with FK reference to user.id",
+        "Run `cd mastra && pnpm run migrate` to apply"
+      ],
+      "files": [
+        "mastra/src/db/schema.ts",
+        "mastra/drizzle/"
+      ],
+      "verify": "cd mastra && pnpm run migrate",
+      "done": true
+    },
+    {
+      "id": 4,
+      "phase": 2,
+      "description": "Mount Better Auth in NestJS via @thallesp/nestjs-better-auth — disable body parser, register AuthModule",
+      "steps": [
+        "In `backend/src/main.ts`, add `bodyParser: false` to `NestFactory.create(AppModule, { bodyParser: false })` — this is CRITICAL, without it Better Auth requests hang because NestJS parses the body before Better Auth can",
+        "In `backend/src/app.module.ts`, import `AuthModule` from `@thallesp/nestjs-better-auth` and add `AuthModule.forRoot({ auth })` to the imports array, passing the auth instance from `./auth/auth.ts`",
+        "The nestjs-better-auth package automatically: mounts `/api/auth/*` routes, re-adds body parsers for non-auth routes, registers a global AuthGuard",
+        "Verify CORS config in main.ts still has `credentials: true` and includes the frontend origin"
+      ],
+      "files": [
+        "backend/src/main.ts",
+        "backend/src/app.module.ts"
+      ],
+      "verify": "cd backend && pnpm build",
+      "done": true
+    },
+    {
+      "id": 5,
+      "phase": 2,
+      "description": "Mark public endpoints with @AllowAnonymous and add @Session() to protected controllers",
+      "steps": [
+        "The nestjs-better-auth AuthGuard is registered globally — all routes are protected by default",
+        "In `backend/src/app.controller.ts`, add `@AllowAnonymous()` decorator to the health check endpoint",
+        "In `backend/src/agents/agents.controller.ts`, import `Session` and `UserSession` from `@thallesp/nestjs-better-auth`",
+        "Add `@Session() session: UserSession` parameter to each controller method that needs the user",
+        "Pass `session.user.id` to service methods as the userId parameter",
+        "In `backend/src/arena/arena.controller.ts`, add `@AllowAnonymous()` to the join endpoint (external agents join via invite token, not user auth)",
+        "In `backend/src/livekit/livekit.controller.ts`, use `@Session()` to get the user for token generation"
+      ],
+      "files": [
+        "backend/src/app.controller.ts",
+        "backend/src/agents/agents.controller.ts",
+        "backend/src/arena/arena.controller.ts",
+        "backend/src/livekit/livekit.controller.ts"
+      ],
+      "verify": "cd backend && pnpm build",
+      "done": true
+    },
+    {
+      "id": 6,
+      "phase": 2,
+      "description": "Update AgentsService to filter and enforce ownership by user_id",
+      "steps": [
+        "Update `AgentsService.listAgents()` to accept `userId: string` param and add `WHERE user_id = $N` condition. Also return agents where `user_id IS NULL` (legacy/seed agents visible to all)",
+        "Update `AgentsService.createAgent()` to include `user_id` in the INSERT statement, using the authenticated user's ID",
+        "Update `AgentsService.updateAgent()` to add `AND (user_id = $N OR user_id IS NULL)` to the WHERE clause — users can only edit their own agents or unowned ones",
+        "Update `AgentsService.deleteAgent()` to add `AND user_id = $N` — users can only delete their own agents (not seed/unowned ones)",
+        "Update `CreateAgentDto` — no changes needed since userId comes from session, not request body"
+      ],
+      "files": [
+        "backend/src/agents/agents.service.ts"
+      ],
+      "verify": "cd backend && pnpm build",
+      "done": true
+    },
+    {
+      "id": 7,
+      "phase": 3,
+      "description": "Install Better Auth React client in the frontend and create the auth client module",
+      "steps": [
+        "Run `cd ui-web && pnpm add better-auth`",
+        "Create `ui-web/src/lib/auth-client.ts`: import `createAuthClient` from `better-auth/react`, configure with `baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4200'` and `fetchOptions: { credentials: 'include' }`",
+        "Export `authClient`, `signIn`, `signOut`, `useSession` from the module",
+        "The `credentials: 'include'` in fetchOptions ensures auth cookies are sent with all Better Auth client requests"
+      ],
+      "files": [
+        "ui-web/src/lib/auth-client.ts",
+        "ui-web/package.json"
+      ],
+      "verify": "cd ui-web && pnpm build",
+      "done": true
+    },
+    {
+      "id": 8,
+      "phase": 3,
+      "description": "Add credentials: include to the API client so auth cookies are sent with every backend request",
+      "steps": [
+        "In `ui-web/src/lib/api.ts`, add `credentials: 'include' as RequestCredentials` to the fetch init object in the `request()` method",
+        "This ensures the Better Auth session cookie is sent with all agent CRUD API calls, not just auth-specific calls"
+      ],
+      "files": [
+        "ui-web/src/lib/api.ts"
+      ],
+      "verify": "cd ui-web && pnpm build",
+      "done": true
+    },
+    {
+      "id": 9,
+      "phase": 4,
+      "description": "Restructure app directory with route groups — (auth) without NavBar, (app) with NavBar",
+      "steps": [
+        "Create route group `ui-web/src/app/(auth)/` with its own `layout.tsx` — minimal layout, no NavBar/StatusBar, centered content",
+        "Move login page to `ui-web/src/app/(auth)/auth/login/page.tsx`",
+        "Create route group `ui-web/src/app/(app)/` with `layout.tsx` that includes NavBar, StatusBar, and LiveSessionProvider (moved from root layout)",
+        "Move existing pages into (app): `(app)/page.tsx` (dashboard), `(app)/agents/`, `(app)/arena/`, `(app)/live/`, `(app)/settings/`, `(app)/profile/`",
+        "Simplify `ui-web/src/app/layout.tsx` to only contain html/body wrapper with fonts and globals.css — no NavBar/StatusBar here",
+        "IMPORTANT: Root layout.tsx must NOT import NavBar/StatusBar anymore — those go in (app)/layout.tsx only"
+      ],
+      "files": [
+        "ui-web/src/app/layout.tsx",
+        "ui-web/src/app/(auth)/layout.tsx",
+        "ui-web/src/app/(auth)/auth/login/page.tsx",
+        "ui-web/src/app/(app)/layout.tsx",
+        "ui-web/src/app/(app)/page.tsx",
+        "ui-web/src/app/(app)/agents/page.tsx",
+        "ui-web/src/app/(app)/agents/[id]/page.tsx",
+        "ui-web/src/app/(app)/arena/page.tsx",
+        "ui-web/src/app/(app)/live/page.tsx",
+        "ui-web/src/app/(app)/settings/page.tsx"
+      ],
+      "verify": "cd ui-web && pnpm build",
+      "done": true
+    },
+    {
+      "id": 10,
+      "phase": 4,
+      "description": "Create the login page with Google OAuth one-click button",
+      "steps": [
+        "Create `ui-web/src/app/(auth)/auth/login/page.tsx` as a 'use client' component",
+        "Center the page content vertically and horizontally",
+        "Display: Siestai logo (Network icon in cyan square), 'Siestai' title, 'AI Agent Platform' subtitle, a styled 'Sign in with Google' button",
+        "On button click, call `signIn.social({ provider: 'google', callbackURL: '/' })` from auth-client",
+        "Use `useSession()` — if session exists and is not loading, redirect to '/' via `useRouter().replace('/')`",
+        "Show a loading spinner while auth state is resolving",
+        "Match the existing dark theme: bg-background, cyan primary, card-style container"
+      ],
+      "files": [
+        "ui-web/src/app/(auth)/auth/login/page.tsx"
+      ],
+      "verify": "cd ui-web && pnpm build",
+      "done": true
+    },
+    {
+      "id": 11,
+      "phase": 4,
+      "description": "Create Next.js middleware to redirect unauthenticated users to login page",
+      "steps": [
+        "Create `ui-web/src/middleware.ts`",
+        "In the middleware function, forward the cookie header from the incoming request to `${NEXT_PUBLIC_API_URL}/api/auth/get-session` via fetch with `credentials: 'include'`",
+        "If the response indicates no valid session (empty/error), return `NextResponse.redirect('/auth/login')`",
+        "If valid session, return `NextResponse.next()`",
+        "Configure matcher to exclude auth routes and static assets: `['/((?!auth|_next/static|_next/image|favicon.ico|icon.svg|api).*)']`",
+        "Handle fetch errors gracefully — if backend is unreachable, redirect to login (not a 500 error page)"
+      ],
+      "files": [
+        "ui-web/src/middleware.ts"
+      ],
+      "verify": "cd ui-web && pnpm build",
+      "done": true
+    },
+    {
+      "id": 12,
+      "phase": 5,
+      "description": "Add user avatar dropdown and sign-out button to the NavBar",
+      "steps": [
+        "In `ui-web/src/components/layout/nav-bar.tsx`, import `useSession` and `signOut` from `@/lib/auth-client`",
+        "Replace the standalone Settings gear icon with a user section containing: user avatar (from `session.data?.user.image` or initials fallback in a cyan circle) and a dropdown or inline links for Profile (/profile), Settings (/settings), and Sign Out",
+        "Sign Out calls `signOut()` then `router.push('/auth/login')`",
+        "On mobile menu: add user name/email at top, Sign Out at bottom",
+        "Import `useRouter` from `next/navigation` for redirect after sign out"
+      ],
+      "files": [
+        "ui-web/src/components/layout/nav-bar.tsx"
+      ],
+      "verify": "cd ui-web && pnpm build",
+      "done": true
+    },
+    {
+      "id": 13,
+      "phase": 5,
+      "description": "Create the profile page where users can view and edit their display name",
+      "steps": [
+        "Create `ui-web/src/app/(app)/profile/page.tsx` as a 'use client' component",
+        "Use `useSession()` to get current user data (name, email, image)",
+        "Display: user avatar (large), name (editable Input), email (read-only, greyed out — from Google), 'Member since' date",
+        "On save, call `authClient.updateUser({ name: newName })` from better-auth/react client",
+        "Show success/error toast or inline feedback",
+        "Reuse the SettingsSection/SettingsRow pattern from the settings page for consistent styling — either import them or duplicate the pattern",
+        "Add a link to /profile in the NavBar user dropdown (from task 12)"
+      ],
+      "files": [
+        "ui-web/src/app/(app)/profile/page.tsx"
+      ],
+      "verify": "cd ui-web && pnpm build",
+      "done": true
+    },
+    {
+      "id": 14,
+      "phase": 6,
+      "description": "Update env examples and AGENTS.md documentation for the new auth system",
+      "steps": [
+        "Update `backend/.env.example` with: GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, BETTER_AUTH_SECRET (min 32 chars), BETTER_AUTH_URL=http://localhost:4200",
+        "Verify `ui-web/.env.example` has NEXT_PUBLIC_API_URL (already present — no changes expected)",
+        "Update `AGENTS.md` with an Auth section covering: Better Auth + Google OAuth setup, @thallesp/nestjs-better-auth integration, database tables (user/session/account/verification), user_id FK on agents, Google Cloud Console callback URL format, env vars needed"
+      ],
+      "files": [
+        "backend/.env.example",
+        "AGENTS.md"
+      ],
+      "verify": "grep GOOGLE_CLIENT_ID backend/.env.example && grep BETTER_AUTH_SECRET backend/.env.example",
+      "done": true
+    },
+    {
+      "id": 15,
+      "phase": 7,
+      "description": "E2E: Verify login page renders and middleware redirects unauthenticated users",
+      "steps": [
+        "agent-browser open http://localhost:3000 && agent-browser wait --load networkidle",
+        "Verify redirect to /auth/login (middleware should redirect unauthenticated users)",
+        "agent-browser screenshot --full screenshots/0005-google-oauth/login-page.png",
+        "agent-browser snapshot -i to verify Google sign-in button is present",
+        "agent-browser close"
+      ],
+      "files": [],
+      "verify": "test -f screenshots/0005-google-oauth/login-page.png",
+      "done": false
+    }
+  ]
+}

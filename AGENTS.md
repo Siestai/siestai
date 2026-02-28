@@ -30,6 +30,7 @@ siestai/                          # monorepo root (git)
 |-------|------|---------|
 | Frontend | Next.js (App Router) + React + Tailwind v4 | 16.1.6 / 19.2.3 / 4 |
 | UI Components | shadcn/ui (new-york) + Radix UI + Lucide icons | — |
+| Auth | Better Auth + @thallesp/nestjs-better-auth | 1.4.x / 2.4.x |
 | Backend | NestJS + raw pg (no ORM) | 11 |
 | AI Runtime | @mastra/core + @mastra/pg + Drizzle ORM | 1.8.0 |
 | Voice | @livekit/agents + Deepgram STT + OpenAI LLM + Cartesia TTS | 1.0.47 |
@@ -72,9 +73,25 @@ Browser (:3000)                   NestJS Backend (:4200)
 - `is_online` column exists in schema but is never written — defaults to `true`
 - `MASTRA_URL` is declared in backend .env but currently unused
 
+### Authentication Flow
+
+- **Google OAuth**: ui-web → `signIn.social({ provider: "google" })` → backend `/api/auth/callback/google` → Better Auth creates user/session → redirects to frontend with session cookie
+- **Session check**: Next.js middleware calls backend `/api/auth/get-session` on every navigation, forwarding the cookie header. Unauthenticated users redirect to `/auth/login`.
+- **API auth**: All backend routes protected by global `AuthGuard` from `@thallesp/nestjs-better-auth`. Public endpoints marked with `@AllowAnonymous()`.
+- **Agent ownership**: `user_id` FK on agents table. Users see their own agents + unowned (seed) agents. Create sets `user_id`, delete restricted to own agents.
+
 ## Database
 
 Single PostgreSQL instance, database `siestai`.
+
+### Better Auth tables (Drizzle-managed)
+
+| Table | Key Columns | Purpose |
+|-------|-------------|---------|
+| user | id (text PK), name, email (unique), email_verified, image, created_at, updated_at | User accounts |
+| session | id (text PK), token (unique), expires_at, user_id (FK→user) | Active sessions |
+| account | id (text PK), account_id, provider_id, user_id (FK→user), access_token, refresh_token | OAuth provider links |
+| verification | id (text PK), identifier, value, expires_at | Verification tokens |
 
 ### `agents` table (Drizzle-managed)
 
@@ -91,6 +108,7 @@ Single PostgreSQL instance, database `siestai`.
 | source | enum(mastra,livekit,external) | 'mastra' |
 | llm_model | varchar(100) | null |
 | is_online | boolean | true |
+| user_id | text (FK→user.id) | null |
 | created_at | timestamp | now() |
 | updated_at | timestamp | now() |
 
@@ -111,21 +129,27 @@ Single PostgreSQL instance, database `siestai`.
 
 | Route | Description |
 |-------|-------------|
+| `/auth/login` | Google OAuth login page (no NavBar) — `(auth)` route group |
 | `/` | Dashboard — quick actions, recent agents (hardcoded), activity |
 | `/agents` | Agent list — real API, search/filter, create/edit/delete |
 | `/agents/[id]` | Agent detail — overview, config, history tabs |
 | `/arena` | Multi-agent arena — 3-step wizard → waiting room → live room → ended |
 | `/live` | 1:1 voice chat — LiveKit room, transcript sidebar, controls |
+| `/profile` | User profile — edit display name, view account info |
 | `/settings` | Display-only settings (no persistence) |
 
+**Route groups:** `(auth)/` has a minimal centered layout (no NavBar/StatusBar). `(app)/` has the full layout with NavBar, StatusBar, and LiveSessionProvider.
+
 **Key lib files:**
-- `lib/api.ts` — `ApiClient` class → backend REST calls
+- `lib/auth-client.ts` — Better Auth React client (`signIn`, `signOut`, `useSession`)
+- `lib/api.ts` — `ApiClient` class → backend REST calls (with `credentials: "include"`)
 - `lib/livekit.ts` — token fetching, room options
 - `lib/arena-api.ts` — arena session management
 - `lib/live-session-context.tsx` — global LiveKit session context
 - `lib/arena-session-context.tsx` — arena page context (WebSocket + state machine)
 - `lib/types.ts` — all TypeScript interfaces
 - `hooks/use-conversation-transcript.ts` — transcript from LiveKit voice events
+- `middleware.ts` — session check on every navigation, redirects to `/auth/login` if unauthenticated
 
 **Theme:** Dark-only (`#0a0a0b` bg, `#22d3ee` cyan primary, `#a855f7` purple gradient end). Defined in `globals.css` as CSS custom properties.
 
@@ -137,19 +161,20 @@ Single PostgreSQL instance, database `siestai`.
 
 | Module | Endpoints | Description |
 |--------|-----------|-------------|
-| Agents | `GET/POST/PUT/DELETE /agents` | CRUD via raw pg Pool |
+| Auth | `/api/auth/*` (auto-mounted) | Better Auth via `@thallesp/nestjs-better-auth` — Google OAuth, sessions |
+| Agents | `GET/POST/PUT/DELETE /agents` | CRUD via raw pg Pool, user_id ownership |
 | Livekit | `POST /livekit/token` | LiveKit token generation + agent dispatch |
 | Arena | `POST /arena/sessions`, `GET /arena/sessions/:id`, `POST /arena/sessions/:id/start`, `POST /arena/join`, `WS /arena/ws` | Session lifecycle + WebSocket relay |
-| Root | `GET /` | Health check |
+| Root | `GET /` | Health check (`@AllowAnonymous`) |
 
 **Key services:**
-- `AgentsService` — pg.Pool queries, dynamic SET builder for updates
+- `AgentsService` — pg.Pool queries, dynamic SET builder for updates, user_id filtering
 - `ArenaService` — in-memory `Map<string, ArenaSession>`, 1hr expiry
 - `InvitationService` — JWT sign/verify for arena invites (host + agent roles)
 - `ArenaGateway` — WebSocket: identify, message relay, system broadcasts
 - `LivekitService` — token generation, room creation, `siestai-agent` dispatch
 
-**Auth:** No global guards. Arena WebSocket validates JWT inline. Global `ValidationPipe` (whitelist + forbidNonWhitelisted). 10KB body limit.
+**Auth:** Global `AuthGuard` from `@thallesp/nestjs-better-auth` — all routes protected by default. `@AllowAnonymous()` on health check and arena join. `@Session()` decorator provides `UserSession` in controllers. `bodyParser: false` required in `NestFactory.create()`. Better Auth uses a dedicated Drizzle instance (separate from the raw pg Pool used by other services). CORS with `credentials: true`.
 
 ### mastra (Mastra Runtime :4111)
 
@@ -214,7 +239,7 @@ make nuke     # full reset (stop + clean node_modules + destroy db)
 - **Components:** shadcn/ui (new-york style), `cn()` helper for class merging
 - **Icons:** lucide-react exclusively
 - **Server/Client split:** Dashboard is Server Component, all interactive pages are `"use client"`
-- **No authentication layer** — no user management, no session auth
+- **Auth:** Google OAuth via Better Auth + `@thallesp/nestjs-better-auth`. Session cookies, global AuthGuard. `@AllowAnonymous()` for public endpoints.
 - **No ORM in backend** — raw pg queries (NestJS); Drizzle only in mastra/ for migrations
 - **ESM everywhere** — all packages use `"type": "module"`
 
