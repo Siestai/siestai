@@ -1,7 +1,13 @@
+networks:
+  siestai:
+    driver: bridge
+
 services:
   postgres:
     image: pgvector/pgvector:pg16
     restart: unless-stopped
+    networks:
+      - siestai
     environment:
       POSTGRES_DB: siestai
       POSTGRES_USER: postgres
@@ -19,6 +25,8 @@ services:
       context: ./mastra
       dockerfile: Dockerfile
     restart: unless-stopped
+    networks:
+      - siestai
     expose:
       - "4111"
     depends_on:
@@ -33,6 +41,8 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     restart: unless-stopped
+    networks:
+      - siestai
     expose:
       - "4200"
     depends_on:
@@ -55,6 +65,8 @@ services:
         NEXT_PUBLIC_API_URL: https://api-staging.siestai.com
         NEXT_PUBLIC_LIVEKIT_URL: wss://siestai-qk2c7bgk.livekit.cloud
     restart: unless-stopped
+    networks:
+      - siestai
     expose:
       - "3000"
     environment:
@@ -65,6 +77,8 @@ services:
       context: ./agent
       dockerfile: Dockerfile
     restart: unless-stopped
+    networks:
+      - siestai
     depends_on:
       - backend
     environment:
