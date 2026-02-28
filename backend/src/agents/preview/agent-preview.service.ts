@@ -3,10 +3,14 @@ import { Agent } from '@mastra/core/agent';
 import type { Response } from 'express';
 import { AgentPreviewDto } from './agent-preview.dto.js';
 import { ActivityService } from '../../activity/activity.service.js';
+import { MastraRegistryService } from '../../mastra/mastra-registry.service.js';
 
 @Injectable()
 export class AgentPreviewService {
-  constructor(private readonly activityService: ActivityService) {}
+  constructor(
+    private readonly activityService: ActivityService,
+    private readonly registry: MastraRegistryService,
+  ) {}
 
   async streamPreview(dto: AgentPreviewDto, userId: string, res: Response) {
     this.activityService.addEvent(userId, {
@@ -14,12 +18,27 @@ export class AgentPreviewService {
       agentName: 'Preview',
       timestamp: new Date().toISOString(),
     });
-    const agent = new Agent({
-      id: 'preview',
-      name: 'preview',
-      instructions: dto.instructions,
-      model: dto.model || 'anthropic/claude-sonnet-4-6',
-    });
+
+    // For saved agents, use the registry instance; for wizard previews, create throwaway
+    let agent: Agent;
+    if (dto.agentId) {
+      const registered = this.registry.getAgent(dto.agentId);
+      agent =
+        registered ??
+        new Agent({
+          id: 'preview',
+          name: 'preview',
+          instructions: dto.instructions,
+          model: dto.model || 'anthropic/claude-sonnet-4-6',
+        });
+    } else {
+      agent = new Agent({
+        id: 'preview',
+        name: 'preview',
+        instructions: dto.instructions,
+        model: dto.model || 'anthropic/claude-sonnet-4-6',
+      });
+    }
 
     try {
       const result = await agent.stream(dto.message);

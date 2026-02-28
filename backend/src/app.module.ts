@@ -8,6 +8,7 @@ import { ArenaModule } from './arena/arena.module';
 import { AgentsModule } from './agents/agents.module';
 import { AgentPreviewModule } from './agents/preview/agent-preview.module';
 import { ActivityModule } from './activity/activity.module';
+import { MastraModule } from './mastra/mastra.module';
 import { auth } from './auth/auth';
 
 @Module({
@@ -21,6 +22,7 @@ import { auth } from './auth/auth';
         next();
       },
     }),
+    MastraModule,
     LivekitModule,
     ArenaModule,
     AgentsModule,

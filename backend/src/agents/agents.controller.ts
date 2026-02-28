@@ -15,10 +15,14 @@ import {
 import { AgentsService } from './agents.service';
 import { CreateAgentDto } from './dto/create-agent.dto';
 import { UpdateAgentDto } from './dto/update-agent.dto';
+import { MastraRegistryService } from '../mastra/mastra-registry.service';
 
 @Controller('agents')
 export class AgentsController {
-  constructor(private readonly agentsService: AgentsService) {}
+  constructor(
+    private readonly agentsService: AgentsService,
+    private readonly registry: MastraRegistryService,
+  ) {}
 
   @Get()
   listAgents(
@@ -31,6 +35,11 @@ export class AgentsController {
       search,
       userId: session.user.id,
     });
+  }
+
+  @Get('registry/status')
+  getRegistryStatus() {
+    return this.registry.listRegistered();
   }
 
   @Get(':id')

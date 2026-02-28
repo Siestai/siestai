@@ -4,6 +4,7 @@ import { Pool } from 'pg';
 import { CreateAgentDto } from './dto/create-agent.dto';
 import { UpdateAgentDto } from './dto/update-agent.dto';
 import { ActivityService } from '../activity/activity.service';
+import { MastraRegistryService } from '../mastra/mastra-registry.service';
 
 @Injectable()
 export class AgentsService implements OnModuleInit {
@@ -12,6 +13,7 @@ export class AgentsService implements OnModuleInit {
   constructor(
     private readonly config: ConfigService,
     private readonly activityService: ActivityService,
+    private readonly registry: MastraRegistryService,
   ) {}
 
   onModuleInit() {
@@ -82,13 +84,19 @@ export class AgentsService implements OnModuleInit {
       ],
     );
 
+    const row = rows[0];
+
+    if (row.source === 'mastra') {
+      this.registry.registerAgent(row);
+    }
+
     this.activityService.addEvent(userId, {
       type: 'agent_created',
       agentName: dto.name,
       timestamp: new Date().toISOString(),
     });
 
-    return rows[0];
+    return row;
   }
 
   async updateAgent(id: string, dto: UpdateAgentDto, userId: string) {
@@ -130,10 +138,18 @@ export class AgentsService implements OnModuleInit {
     if (rows.length === 0) {
       throw new NotFoundException('Agent not found');
     }
-    return rows[0];
+
+    const row = rows[0];
+    this.registry.unregisterAgent(id);
+    if (row.source === 'mastra') {
+      this.registry.registerAgent(row);
+    }
+
+    return row;
   }
 
   async deleteAgent(id: string, userId: string) {
+    this.registry.unregisterAgent(id);
     const { rows } = await this.pool.query(
       'DELETE FROM agents WHERE id = $1 AND user_id = $2 RETURNING id',
       [id, userId],

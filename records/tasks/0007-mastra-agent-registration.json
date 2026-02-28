@@ -1,0 +1,120 @@
+{
+  "title": "Mastra Agent Registration — Every Internal Agent = Mastra Agent",
+  "plan": "records/plans/0007-mastra-agent-registration.md",
+  "tasks": [
+    {
+      "id": 1,
+      "phase": 1,
+      "description": "Create MastraRegistryService that owns the Mastra singleton and exposes register/unregister/get methods for Mastra Agent instances.",
+      "steps": [
+        "Create `backend/src/mastra/mastra-registry.service.ts` as an @Injectable NestJS service",
+        "Initialize a `Mastra` instance (from `@mastra/core`) in the constructor with empty agents: `new Mastra({ agents: {} })`",
+        "Expose `registerAgent(row: AgentRow)`: construct `new Agent({ id: row.id, name: row.name, instructions: row.instructions, model: row.llm_model || 'anthropic/claude-sonnet-4-6' })`, then call `this.mastra.addAgent(agent, row.id)`. Note: `addAgent()` silently skips if key exists — this is fine for startup but NOT for updates.",
+        "Expose `unregisterAgent(id: string): boolean`: calls `this.mastra.removeAgent(id)`, returns the boolean result",
+        "Expose `getAgent(id: string): Agent | null`: wrap `this.mastra.getAgent(id)` in try/catch — `getAgent()` THROWS MastraError if not found, so catch and return `null`",
+        "Expose `listRegistered(): { count: number; agentIds: string[] }`: calls `Object.keys(this.mastra.listAgents())` for the keys, returns count + ids",
+        "Define a local `AgentRow` interface matching the raw pg query row shape: `{ id: string; name: string; instructions: string; llm_model: string | null; source: string; ... }` — only the fields needed for Agent construction"
+      ],
+      "files": ["backend/src/mastra/mastra-registry.service.ts"],
+      "verify": "cd backend && pnpm build",
+      "done": true
+    },
+    {
+      "id": 2,
+      "phase": 1,
+      "description": "Create MastraModule that provides and exports MastraRegistryService globally, and wire it into AppModule.",
+      "steps": [
+        "Create `backend/src/mastra/mastra.module.ts` as a `@Global()` `@Module`",
+        "Register `MastraRegistryService` as a provider and export it",
+        "Import `ConfigModule` so the service can access `DATABASE_URL` via `ConfigService`",
+        "In `backend/src/app.module.ts`, add `MastraModule` to the imports array — place it BEFORE `AgentsModule` and `AgentPreviewModule` so the registry is available when those modules initialize"
+      ],
+      "files": [
+        "backend/src/mastra/mastra.module.ts",
+        "backend/src/app.module.ts"
+      ],
+      "verify": "cd backend && pnpm build",
+      "done": true
+    },
+    {
+      "id": 3,
+      "phase": 2,
+      "description": "Load all existing mastra-source agents from the DB into the registry on application startup, using OnApplicationBootstrap to avoid race conditions with AgentsService's OnModuleInit pg Pool.",
+      "steps": [
+        "In `MastraRegistryService`, implement `OnApplicationBootstrap` interface",
+        "Inject `ConfigService` and create a `Pool` instance from `DATABASE_URL` in `onApplicationBootstrap()`",
+        "Query `SELECT id, name, instructions, llm_model, source FROM agents WHERE source = 'mastra'` — no user_id filter, loads seed + user agents",
+        "For each row, call `this.registerAgent(row)` inside a try/catch so one failure doesn't block others",
+        "Log: `this.logger.log('Mastra registry: loaded ${count}/${total} agents')` using NestJS Logger",
+        "Close the Pool after loading — ongoing queries use AgentsService's pool, not this one"
+      ],
+      "files": ["backend/src/mastra/mastra-registry.service.ts"],
+      "verify": "cd backend && pnpm build",
+      "done": true
+    },
+    {
+      "id": 4,
+      "phase": 2,
+      "description": "Wire AgentsService to sync the Mastra registry on create/update/delete operations.",
+      "steps": [
+        "Inject `MastraRegistryService` into `AgentsService` constructor",
+        "In `createAgent()`: after the INSERT RETURNING, if `row.source === 'mastra'`, call `this.registry.registerAgent(row)` — the returned row has all needed fields",
+        "In `updateAgent()`: after the UPDATE RETURNING, call `this.registry.unregisterAgent(id)` first (safe even if not found), then if `row.source === 'mastra'` call `this.registry.registerAgent(row)`. This handles source changes (mastra→external removes, external→mastra adds).",
+        "In `deleteAgent()`: BEFORE the DELETE query, call `this.registry.unregisterAgent(id)` — ignore the boolean return",
+        "No changes needed to `AgentsModule` imports because `MastraModule` is `@Global()`"
+      ],
+      "files": ["backend/src/agents/agents.service.ts"],
+      "verify": "cd backend && pnpm build",
+      "done": true
+    },
+    {
+      "id": 5,
+      "phase": 3,
+      "description": "Refactor AgentPreviewService to use registry agents for saved agents while keeping throwaway instances for unsaved wizard previews.",
+      "steps": [
+        "Inject `MastraRegistryService` into `AgentPreviewService` constructor",
+        "Add `@IsOptional() @IsString() agentId?: string` field to `AgentPreviewDto` in `backend/src/agents/preview/agent-preview.dto.ts`",
+        "In `streamPreview()`: if `dto.agentId` is provided, call `this.registry.getAgent(dto.agentId)` — if it returns an Agent, use it for `.stream()`. If null (not in registry), fall back to throwaway `new Agent()` with the dto fields.",
+        "If `dto.agentId` is NOT provided (wizard preview), keep existing throwaway `new Agent({ id: 'preview', ... })` behavior unchanged",
+        "Update `AgentPreviewModule` imports to ensure `MastraRegistryService` is accessible (should already work via @Global)"
+      ],
+      "files": [
+        "backend/src/agents/preview/agent-preview.service.ts",
+        "backend/src/agents/preview/agent-preview.dto.ts"
+      ],
+      "verify": "cd backend && pnpm build",
+      "done": true
+    },
+    {
+      "id": 6,
+      "phase": 3,
+      "description": "Add GET /agents/registry/status endpoint for debugging — shows how many agents are loaded in the Mastra registry and their IDs.",
+      "steps": [
+        "In `AgentsController`, add `@Get('registry/status')` handler that calls `this.registry.listRegistered()` and returns the result",
+        "Inject `MastraRegistryService` into `AgentsController` constructor alongside `AgentsService`",
+        "CRITICAL: Place the `@Get('registry/status')` route ABOVE `@Get(':id')` in the controller — NestJS matches routes top-to-bottom, and `:id` would catch 'registry' as a param otherwise",
+        "Return shape: `{ count: number, agentIds: string[] }`"
+      ],
+      "files": ["backend/src/agents/agents.controller.ts"],
+      "verify": "cd backend && pnpm build",
+      "done": true
+    },
+    {
+      "id": 7,
+      "phase": 4,
+      "description": "Unit test MastraRegistryService — verify register/unregister/get behavior and the critical getAgent-throws-on-missing edge case.",
+      "steps": [
+        "Create `backend/src/mastra/mastra-registry.service.spec.ts`",
+        "Test: `registerAgent()` with a mock row → `getAgent(id)` returns an Agent with matching id, name, instructions",
+        "Test: `getAgent()` for non-existent id returns `null` (not throw) — verifies the try/catch wrapper works",
+        "Test: `unregisterAgent()` returns `true` for registered, `false` for non-existent",
+        "Test: `registerAgent()` twice with same id → second call is silently skipped (addAgent behavior), agent retains original config. Then test the update pattern: `unregisterAgent()` + `registerAgent()` → agent has new config.",
+        "Test: `listRegistered()` returns correct count after register/unregister operations",
+        "No DB mocking needed — only test the in-memory Mastra registry, skip the onApplicationBootstrap DB loading"
+      ],
+      "files": ["backend/src/mastra/mastra-registry.service.spec.ts"],
+      "verify": "cd backend && pnpm test -- --testPathPatterns=mastra-registry",
+      "done": true
+    }
+  ]
+}
