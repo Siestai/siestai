@@ -215,3 +215,17 @@ export type ArenaWsClientMessage =
       model?: string;
   instructions?: string;
     };
+
+// Agent preview & activity types
+export interface AgentPreviewRequest {
+  instructions: string;
+  model: string;
+  message: string;
+}
+
+export interface ActivityEvent {
+  id: string;
+  type: "agent_created" | "agent_tested";
+  agentName: string;
+  timestamp: string;
+}

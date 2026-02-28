@@ -7,6 +7,8 @@ import type {
   CreateAgentData,
   UpdateAgentData,
   HealthResponse,
+  AgentPreviewRequest,
+  ActivityEvent,
 } from "./types";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4200";
@@ -72,6 +74,21 @@ class ApiClient {
 
   async deleteAgent(id: string): Promise<void> {
     await this.request(`/agents/${id}`, { method: "DELETE" });
+  }
+
+  // Agent preview
+  async previewStream(payload: AgentPreviewRequest): Promise<Response> {
+    return fetch(`${this.baseUrl}/agents/preview/stream`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify(payload),
+    });
+  }
+
+  // Activity
+  async getActivity(): Promise<ActivityEvent[]> {
+    return this.request<ActivityEvent[]>("/activity");
   }
 
   // Resolve agent name

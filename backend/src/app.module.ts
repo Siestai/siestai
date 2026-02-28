@@ -6,6 +6,8 @@ import { AppService } from './app.service';
 import { LivekitModule } from './livekit/livekit.module';
 import { ArenaModule } from './arena/arena.module';
 import { AgentsModule } from './agents/agents.module';
+import { AgentPreviewModule } from './agents/preview/agent-preview.module';
+import { ActivityModule } from './activity/activity.module';
 import { auth } from './auth/auth';
 
 @Module({
@@ -22,6 +24,8 @@ import { auth } from './auth/auth';
     LivekitModule,
     ArenaModule,
     AgentsModule,
+    AgentPreviewModule,
+    ActivityModule,
   ],
   controllers: [AppController],
   providers: [AppService],

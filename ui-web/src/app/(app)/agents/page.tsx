@@ -21,8 +21,8 @@ export default function AgentsPage() {
   const [selectedCategory, setSelectedCategory] = useState("all");
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
-  const [formOpen, setFormOpen] = useState(false);
   const [editAgent, setEditAgent] = useState<Agent | undefined>(undefined);
+  const [editFormOpen, setEditFormOpen] = useState(false);
   const [deleteAgent, setDeleteAgent] = useState<Agent | null>(null);
 
   const fetchAgents = useCallback(
@@ -67,13 +67,12 @@ export default function AgentsPage() {
   };
 
   const handleCreate = () => {
-    setEditAgent(undefined);
-    setFormOpen(true);
+    router.push("/agents/new");
   };
 
   const handleEdit = (agent: Agent) => {
     setEditAgent(agent);
-    setFormOpen(true);
+    setEditFormOpen(true);
   };
 
   const handleSaved = () => {
@@ -213,8 +212,8 @@ export default function AgentsPage() {
       )}
 
       <AgentFormDialog
-        open={formOpen}
-        onOpenChange={setFormOpen}
+        open={editFormOpen}
+        onOpenChange={setEditFormOpen}
         agent={editAgent}
         onSaved={handleSaved}
       />

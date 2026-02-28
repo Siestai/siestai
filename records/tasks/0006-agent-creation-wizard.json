@@ -1,0 +1,140 @@
+{
+  "title": "Agent Creation Wizard",
+  "plan": "records/plans/0006-agent-creation-wizard.md",
+  "tasks": [
+    {
+      "id": 1,
+      "phase": 1,
+      "description": "Add @mastra/core to backend and create AgentPreviewModule with a POST /agents/preview/stream SSE endpoint that spins up a throwaway Mastra Agent and pipes token-by-token chunks back to the client.",
+      "steps": [
+        "cd backend && pnpm add @mastra/core",
+        "Add ANTHROPIC_API_KEY to backend/.env.example with comment '# Required for agent preview streaming'",
+        "Create backend/src/agents/preview/agent-preview.dto.ts — export class AgentPreviewDto with @IsString() validators: instructions (required), model (optional, default 'anthropic/claude-sonnet-4-6'), message (required)",
+        "Create backend/src/agents/preview/agent-preview.service.ts — import { Agent } from '@mastra/core/agent'. Injectable service with method streamPreview(dto: AgentPreviewDto, userId: string, res: Response). Creates a throwaway Agent({name: 'preview', instructions: dto.instructions, model: dto.model || 'anthropic/claude-sonnet-4-6'}). Calls agent.stream({messages: [{role: 'user', content: dto.message}]}). Iterates result.textStream (AsyncIterable) inside try/catch. For each chunk: res.write(`data: ${JSON.stringify({text: chunk})}\\n\\n`). After loop: res.write('data: {\"done\":true}\\n\\n'). Finally: res.end(). Wrap entire streaming in try/finally to ensure res.end() is called even on error.",
+        "Create backend/src/agents/preview/agent-preview.controller.ts — @Controller('agents'), @Post('preview/stream'). Inject AgentPreviewService. Use @Body() dto: AgentPreviewDto and @Res() res: Response and @Session() session. Set headers: Content-Type: text/event-stream, Cache-Control: no-cache, Connection: keep-alive, X-Accel-Buffering: no. Call res.flushHeaders(). Delegate to service.streamPreview(dto, session.user.id, res). Return type is void (response handled manually).",
+        "Create backend/src/agents/preview/agent-preview.module.ts — @Module({ controllers: [AgentPreviewController], providers: [AgentPreviewService], exports: [AgentPreviewService] })"
+      ],
+      "files": [
+        "backend/package.json",
+        "backend/.env.example",
+        "backend/src/agents/preview/agent-preview.dto.ts",
+        "backend/src/agents/preview/agent-preview.service.ts",
+        "backend/src/agents/preview/agent-preview.controller.ts",
+        "backend/src/agents/preview/agent-preview.module.ts"
+      ],
+      "verify": "cd backend && pnpm build",
+      "done": true
+    },
+    {
+      "id": 2,
+      "phase": 1,
+      "description": "Create ActivityModule (service + controller) with an in-memory per-user event ring buffer and a GET /activity endpoint. Wire ActivityModule and AgentPreviewModule into AppModule. Inject ActivityService into AgentsService to fire 'agent_created' events, and into AgentPreviewService to fire 'agent_tested' events.",
+      "steps": [
+        "Create backend/src/activity/activity.service.ts — Injectable service. Define ActivityEvent interface: {id: string, type: 'agent_created' | 'agent_tested', agentName: string, timestamp: string}. Private field: events = new Map<string, ActivityEvent[]>(). Method addEvent(userId: string, event: Omit<ActivityEvent, 'id'>): generates id via crypto.randomUUID(), prepends to user's array, trims to max 50 entries. Method getEvents(userId: string): returns the user's array or empty array.",
+        "Create backend/src/activity/activity.controller.ts — @Controller('activity'), @Get() getActivity(@Session() session). Returns this.activityService.getEvents(session.user.id). Protected by global AuthGuard (no extra decorators needed).",
+        "Create backend/src/activity/activity.module.ts — @Module({ controllers: [ActivityController], providers: [ActivityService], exports: [ActivityService] }). Mark as @Global() so other modules can inject ActivityService without importing ActivityModule.",
+        "In backend/src/app.module.ts — add ActivityModule and AgentPreviewModule to the imports array (import from their respective paths).",
+        "In backend/src/agents/agents.service.ts — inject ActivityService in constructor. In createAgent() method, after the INSERT query succeeds, call this.activityService.addEvent(userId, {type: 'agent_created', agentName: dto.name, timestamp: new Date().toISOString()}).",
+        "In backend/src/agents/preview/agent-preview.service.ts — inject ActivityService in constructor. At the start of streamPreview(), call this.activityService.addEvent(userId, {type: 'agent_tested', agentName: 'Preview', timestamp: new Date().toISOString()})."
+      ],
+      "files": [
+        "backend/src/activity/activity.service.ts",
+        "backend/src/activity/activity.controller.ts",
+        "backend/src/activity/activity.module.ts",
+        "backend/src/app.module.ts",
+        "backend/src/agents/agents.service.ts",
+        "backend/src/agents/preview/agent-preview.service.ts"
+      ],
+      "verify": "cd backend && pnpm build",
+      "done": true
+    },
+    {
+      "id": 3,
+      "phase": 2,
+      "description": "Add frontend types and API methods for agent preview and activity. Create the wizard layout component and the /agents/new page shell with step routing.",
+      "steps": [
+        "In ui-web/src/lib/types.ts — add: export interface AgentPreviewRequest { instructions: string; model: string; message: string; }. Add: export interface ActivityEvent { id: string; type: 'agent_created' | 'agent_tested'; agentName: string; timestamp: string; }.",
+        "In ui-web/src/lib/api.ts — add method previewStream(payload: AgentPreviewRequest): Promise<Response> that does fetch(`${API_BASE_URL}/agents/preview/stream`, { method: 'POST', headers: {'Content-Type': 'application/json'}, credentials: 'include', body: JSON.stringify(payload) }) and returns the raw Response (caller reads body stream). Add method getActivity(): Promise<ActivityEvent[]> that calls this.request<ActivityEvent[]>('/activity').",
+        "Create ui-web/src/components/agents/wizard/wizard-layout.tsx — 'use client'. Props: { step: number; totalSteps: number; stepLabels: string[]; onBack: () => void; onNext: () => void; onSave?: () => void; saving?: boolean; nextDisabled?: boolean; children: React.ReactNode }. Renders: (1) a horizontal progress bar at top showing 4 labeled step circles connected by lines, cyan fill for completed steps, ring for current, muted for future; (2) children slot for step content; (3) footer with Back button (hidden on step 1), Next button (steps 1-3, disabled when nextDisabled), and 'Save & Create Agent' button (step 4 only, calls onSave, shows spinner when saving). Use the project's dark theme styling (bg-[#0a0a0b], cyan accents).",
+        "Create ui-web/src/app/(app)/agents/new/page.tsx — 'use client'. State: currentStep (1-4), wizardState: { name: '', description: '', category: 'conversational', color: '#3b82f6', icon: 'bot', instructions: '', llmModel: 'anthropic/claude-sonnet-4-6' }. Import WizardLayout. Render WizardLayout with stepLabels=['Identity','Instructions','Templates','Test Run']. For now, render placeholder <div>Step {n}</div> for each step — actual step components will be added in tasks 4-6. The page includes a 'Back to Agents' breadcrumb link at the top using next/link pointing to /agents. nextDisabled logic: step 1 requires name, step 2 requires instructions. onSave handler: calls api.createAgent() with { name, instructions, description, category, color, icon, source: 'mastra', llmModel } then router.push(`/agents`)."
+      ],
+      "files": [
+        "ui-web/src/lib/types.ts",
+        "ui-web/src/lib/api.ts",
+        "ui-web/src/components/agents/wizard/wizard-layout.tsx",
+        "ui-web/src/app/(app)/agents/new/page.tsx"
+      ],
+      "verify": "cd ui-web && pnpm build",
+      "done": true
+    },
+    {
+      "id": 4,
+      "phase": 2,
+      "description": "Build Step 1 (Identity) and Step 2 (Instructions & Model) wizard components and wire them into the wizard page.",
+      "steps": [
+        "Create ui-web/src/components/agents/wizard/step-identity.tsx — 'use client'. Props: { value: { name: string; description: string; category: string; color: string; icon: string }; onChange: (updates: Partial<typeof value>) => void }. Renders: name Input (required, maxLength 100, placeholder 'e.g. Atlas'), description Input (optional, placeholder 'A short description'), category as a row of pill buttons for each AGENT_CATEGORIES value (highlight selected with cyan bg), AGENT_CARD_COLORS as clickable color circles (same style as agent-form-dialog.tsx — 8x8 circles, cyan ring on selected), icon picker as 6 Lucide icon buttons in a row (Bot, Brain, Sparkles, Zap, MessageSquare, Code2) with the selected one highlighted. Use cn() for conditional classes.",
+        "Create ui-web/src/components/agents/wizard/step-instructions.tsx — 'use client'. Props: { value: { instructions: string; llmModel: string }; onChange: (updates: Partial<typeof value>) => void }. Renders: a Label 'System Prompt' above a Textarea (rows={10}, placeholder 'You are a helpful...', value=instructions). Below the textarea show character count in muted text ('X characters'). Then a Label 'LLM Model' above a Select dropdown with options: 'anthropic/claude-sonnet-4-6' (label: 'Claude Sonnet 4.6 (Recommended)'), 'anthropic/claude-haiku-4-5-20251001' (label: 'Claude Haiku 4.5 (Fast)'), 'openai/gpt-4.1' (label: 'GPT-4.1'), 'openai/gpt-4.1-mini' (label: 'GPT-4.1 Mini'). Use shadcn Select component.",
+        "In ui-web/src/app/(app)/agents/new/page.tsx — replace the step 1 and step 2 placeholders with <StepIdentity> and <StepInstructions> components. Pass the relevant slices of wizardState as value and wire onChange to update wizardState via setState spread pattern."
+      ],
+      "files": [
+        "ui-web/src/components/agents/wizard/step-identity.tsx",
+        "ui-web/src/components/agents/wizard/step-instructions.tsx",
+        "ui-web/src/app/(app)/agents/new/page.tsx"
+      ],
+      "verify": "cd ui-web && pnpm build",
+      "done": true
+    },
+    {
+      "id": 5,
+      "phase": 2,
+      "description": "Build Step 3 (Skills Templates) component — shows 6 pre-built starter templates plus a 'Custom' tile; selecting a template pre-fills instructions (with confirmation if already set). Wire into wizard page.",
+      "steps": [
+        "Create ui-web/src/components/agents/wizard/step-skills.tsx — 'use client'. Props: { currentInstructions: string; onChange: (updates: { instructions: string; category?: string; color?: string; icon?: string }) => void }. Define SKILL_TEMPLATES constant array with 6 items, each: { id: string, label: string, description: string, category: string, icon: string (Lucide component name), color: string (from AGENT_CARD_COLORS), instructions: string (multi-line system prompt, 3-5 sentences each) }. Templates: (1) Customer Support — conversational, HeadphonesIcon, green; (2) Code Reviewer — technical, Code2, blue; (3) Creative Writer — creative, Sparkles, purple; (4) Debate Partner — debate, MessageSquare, red; (5) Research Assistant — technical, Brain, blue; (6) Personal Coach — conversational, Zap, yellow.",
+        "Render a 2-column grid (responsive: 1 col on mobile). First tile: 'Custom / Keep My Instructions' with Pencil icon and muted styling — selecting it does nothing (no onChange call). Remaining 6 tiles: clickable cards showing the Lucide icon, label, short description, and a category badge pill. Style: dark cards (bg-card/50 border border-border), selected card has cyan border (border-cyan-400). Use the template's color for the icon tint.",
+        "On template card click: if currentInstructions is non-empty and differs from the template's instructions, show a confirm state on that card (e.g. 'This will replace your instructions. Click again to confirm.' text below the card, or change button text to 'Confirm?'). On second click (or if instructions were empty), call onChange({ instructions: template.instructions, category: template.category, color: template.color }). Track selectedTemplateId in local state.",
+        "In ui-web/src/app/(app)/agents/new/page.tsx — replace step 3 placeholder with <StepSkills currentInstructions={wizardState.instructions} onChange={...}>. The onChange should spread updates into wizardState."
+      ],
+      "files": [
+        "ui-web/src/components/agents/wizard/step-skills.tsx",
+        "ui-web/src/app/(app)/agents/new/page.tsx"
+      ],
+      "verify": "cd ui-web && pnpm build",
+      "done": true
+    },
+    {
+      "id": 6,
+      "phase": 3,
+      "description": "Build Step 4 (Test Run) — streaming chat using fetch + ReadableStream to POST /agents/preview/stream. Wire into wizard page. Update /agents page to navigate to /agents/new instead of opening the dialog.",
+      "steps": [
+        "Create ui-web/src/components/agents/wizard/step-test-run.tsx — 'use client'. Props: { agentConfig: { name: string; instructions: string; llmModel: string }; onSave: () => void; saving: boolean; saveDisabled: boolean }. Local state: messages (array of { role: 'user' | 'assistant'; text: string }), inputValue: string, streaming: boolean.",
+        "Render: (1) Agent summary card at top showing agentConfig.name and model badge. (2) Scrollable message list (max-h with overflow-y-auto, auto-scroll to bottom on new messages via useRef + scrollIntoView). User messages right-aligned with cyan-ish bg, assistant messages left-aligned with muted bg. (3) Input row at bottom: Input + Send button (ArrowUp icon). Disable input and button while streaming.",
+        "sendMessage function: if inputValue is empty or streaming, return. Set streaming=true. Append { role: 'user', text: inputValue } to messages, clear inputValue. Append empty { role: 'assistant', text: '' } to messages. Call api.previewStream({ instructions: agentConfig.instructions, model: agentConfig.llmModel, message: inputValue }). Read response.body via getReader() + TextDecoder. Parse SSE lines: split on '\\n', filter lines starting with 'data: ', JSON.parse the data payload. If payload has 'text', append to last assistant message's text. If payload has 'done: true', set streaming=false. On error, append '[Error: connection failed]' to assistant message and set streaming=false. Use functional setState to avoid stale closures.",
+        "Show animated dots ('...') as assistant message text while streaming=true and assistant text is still empty. At the bottom: 'Save & Create Agent' button (primary, full width) disabled if saveDisabled prop is true. Clicking calls onSave(). Show spinner when saving is true.",
+        "In ui-web/src/app/(app)/agents/new/page.tsx — replace step 4 placeholder with <StepTestRun agentConfig={{name: wizardState.name, instructions: wizardState.instructions, llmModel: wizardState.llmModel}} onSave={handleSave} saving={saving} saveDisabled={saving}>. Track 'saving' state. handleSave: set saving=true, call api.createAgent({name, instructions, description, category, color, icon, source: 'mastra', llmModel: wizardState.llmModel}), on success router.push('/agents'), on error show toast/alert, finally set saving=false.",
+        "In ui-web/src/app/(app)/agents/page.tsx — change handleCreate() from setFormOpen(true) to router.push('/agents/new'). Remove the formOpen state, the AgentFormDialog import, and the <AgentFormDialog> JSX. Keep everything else (DeleteAgentDialog, edit dialog, etc). Import useRouter from next/navigation if not already imported."
+      ],
+      "files": [
+        "ui-web/src/components/agents/wizard/step-test-run.tsx",
+        "ui-web/src/app/(app)/agents/new/page.tsx",
+        "ui-web/src/app/(app)/agents/page.tsx"
+      ],
+      "verify": "cd ui-web && pnpm build",
+      "done": true
+    },
+    {
+      "id": 7,
+      "phase": 4,
+      "description": "Add a live ActivityFeed client component to the dashboard that polls GET /activity every 5 seconds and renders recent events.",
+      "steps": [
+        "Create ui-web/src/components/dashboard/activity-feed.tsx — 'use client'. Import { Bot, Zap } from lucide-react. Import { api } from '@/lib/api'. Import ActivityEvent from types. useEffect with setInterval(5000) calling api.getActivity().then(setEvents).catch(() => {}). Also fetch once on mount. State: events: ActivityEvent[]. Render a card (bg-card/50 border border-border rounded-xl p-6) with h3 'Recent Activity'. If events is empty: show placeholder text 'No activity yet — create or test an agent to see events here' in muted color. Otherwise: render a list (max 20 items) of event rows. Each row: left icon (Bot for 'agent_created', Zap for 'agent_tested' — both in cyan), event type label ('Created' or 'Tested'), agentName in bold, relative timestamp on the right. For relative time, compute from event.timestamp: use a simple helper (< 60s: 'just now', < 60m: 'Xm ago', < 24h: 'Xh ago', else: date string).",
+        "In ui-web/src/app/(app)/page.tsx — import ActivityFeed component. Add it below the existing content (after the 'Recent Agents' section or quick actions). The dashboard page stays a Server Component; ActivityFeed is a client island that handles its own data fetching. Just render <ActivityFeed /> directly."
+      ],
+      "files": [
+        "ui-web/src/components/dashboard/activity-feed.tsx",
+        "ui-web/src/app/(app)/page.tsx"
+      ],
+      "verify": "cd ui-web && pnpm build",
+      "done": true
+    }
+  ]
+}

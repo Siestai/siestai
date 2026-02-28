@@ -3,12 +3,16 @@ import { ConfigService } from '@nestjs/config';
 import { Pool } from 'pg';
 import { CreateAgentDto } from './dto/create-agent.dto';
 import { UpdateAgentDto } from './dto/update-agent.dto';
+import { ActivityService } from '../activity/activity.service';
 
 @Injectable()
 export class AgentsService implements OnModuleInit {
   private pool: Pool;
 
-  constructor(private readonly config: ConfigService) {}
+  constructor(
+    private readonly config: ConfigService,
+    private readonly activityService: ActivityService,
+  ) {}
 
   onModuleInit() {
     this.pool = new Pool({
@@ -77,6 +81,13 @@ export class AgentsService implements OnModuleInit {
         userId,
       ],
     );
+
+    this.activityService.addEvent(userId, {
+      type: 'agent_created',
+      agentName: dto.name,
+      timestamp: new Date().toISOString(),
+    });
+
     return rows[0];
   }
 

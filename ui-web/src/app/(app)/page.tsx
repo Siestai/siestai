@@ -1,6 +1,7 @@
 import { Users, Phone, Bot, Plus, Zap } from "lucide-react";
 import Link from "next/link";
 import type { Agent } from "@/lib/types";
+import { ActivityFeed } from "@/components/dashboard/activity-feed";
 
 const recentAgents: Agent[] = [
   {
@@ -196,6 +197,9 @@ export default function DashboardPage() {
           ))}
         </div>
       </div>
+
+      {/* Activity Feed */}
+      <ActivityFeed />
     </div>
   );
 }
