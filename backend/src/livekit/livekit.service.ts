@@ -114,9 +114,9 @@ export class LivekitService {
       canPublishData: true,
     });
 
-    at.roomConfig = new RoomConfiguration({
-      agents: [new RoomAgentDispatch({ agentName: 'siestai-agent' })],
-    });
+    // No roomConfig here — agent was already dispatched explicitly above.
+    // Adding RoomAgentDispatch on the token would cause a duplicate dispatch
+    // when the user joins, resulting in two competing agents in the room.
 
     return {
       token: await at.toJwt(),

@@ -16,6 +16,19 @@ const isDev = process.argv.includes('dev');
 
 const getLogger = () => log();
 
+const REQUIRED_ENV = ['LIVEKIT_URL', 'LIVEKIT_API_KEY', 'LIVEKIT_API_SECRET', 'OPENAI_API_KEY'] as const;
+
+function validateEnv(): void {
+  const missing = REQUIRED_ENV.filter((key) => !process.env[key]);
+  if (missing.length > 0) {
+    const logger = getLogger();
+    logger.error(
+      { missing },
+      `Missing required environment variables — agent will not function correctly`,
+    );
+  }
+}
+
 const OPENAI_ARENA_VOICES = [
   'onyx',    // deep male
   'shimmer', // bright female
@@ -278,14 +291,19 @@ function parseArenaMetadata(raw: string | undefined): ArenaMetadata | null {
     if (parsed?.type === 'arena' && Array.isArray(parsed.agents)) {
       return parsed as ArenaMetadata;
     }
-  } catch {
-    // Not JSON or not arena metadata — fall through to default agent
+    getLogger().debug({ parsedType: parsed?.type }, 'Room metadata present but not arena type');
+  } catch (err) {
+    getLogger().warn(
+      { error: err instanceof Error ? err.message : String(err), metadataLength: raw.length },
+      'Failed to parse room metadata as JSON — falling back to default agent',
+    );
   }
   return null;
 }
 
 export default defineAgent({
   prewarm: async (proc) => {
+    validateEnv();
     proc.userData.vad = await VAD.load();
   },
   entry: async (ctx) => {
