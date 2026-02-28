@@ -48,5 +48,5 @@ export class UpdateAgentDto {
   @IsOptional()
   @IsString()
   @MaxLength(100)
-  llm_model?: string;
+  llmModel?: string;
 }

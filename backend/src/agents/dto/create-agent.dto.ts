@@ -49,5 +49,5 @@ export class CreateAgentDto {
   @IsOptional()
   @IsString()
   @MaxLength(100)
-  llm_model?: string;
+  llmModel?: string;
 }
