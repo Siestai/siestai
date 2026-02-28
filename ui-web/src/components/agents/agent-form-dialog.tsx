@@ -95,7 +95,7 @@ export function AgentFormDialog({
       color,
       icon: icon.trim() || "bot",
       source,
-      llm_model: llmModel.trim() || undefined,
+      llmModel: llmModel.trim() || undefined,
     };
 
     try {

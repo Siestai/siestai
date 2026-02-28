@@ -30,7 +30,7 @@ export type CreateAgentData = {
   tags?: string[];
   color?: string;
   icon?: string;
-  llm_model?: string;
+  llmModel?: string;
 };
 
 export type UpdateAgentData = Partial<CreateAgentData>;
