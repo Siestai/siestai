@@ -2,8 +2,6 @@ services:
   postgres:
     image: pgvector/pgvector:pg16
     restart: unless-stopped
-    ports:
-      - "5432:5432"
     environment:
       POSTGRES_DB: siestai
       POSTGRES_USER: postgres
@@ -47,13 +45,14 @@ services:
       LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET}
       ARENA_INVITE_SECRET: ${ARENA_INVITE_SECRET}
       FRONTEND_URL: https://staging.siestai.com
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgres}@postgres:5432/siestai
 
   ui-web:
     build:
       context: ./ui-web
       dockerfile: Dockerfile
       args:
-        NEXT_PUBLIC_API_URL: https://api.staging.siestai.com
+        NEXT_PUBLIC_API_URL: https://api-staging.siestai.com
         NEXT_PUBLIC_LIVEKIT_URL: wss://siestai-qk2c7bgk.livekit.cloud
     restart: unless-stopped
     ports:

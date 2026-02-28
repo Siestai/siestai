@@ -10,9 +10,16 @@ async function bootstrap() {
   // Limit request body size to prevent oversized payloads
   app.use(json({ limit: '10kb' }));
 
-  // CORS allowlist — update with actual frontend domain(s) before deploying to production
+  // CORS allowlist — driven by FRONTEND_URL env var in production
+  const allowedOrigins = [
+    'http://localhost:3000',
+    'http://localhost:3001',
+  ];
+  if (process.env.FRONTEND_URL) {
+    allowedOrigins.push(process.env.FRONTEND_URL);
+  }
   app.enableCors({
-    origin: ['http://localhost:3000', 'http://localhost:3001'],
+    origin: allowedOrigins,
     credentials: true,
   });
 
