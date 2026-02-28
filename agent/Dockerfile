@@ -18,4 +18,5 @@ RUN corepack enable && corepack prepare pnpm@latest --activate
 COPY --from=build /app/package.json /app/pnpm-lock.yaml ./
 RUN pnpm install --frozen-lockfile --prod
 COPY --from=build /app/dist ./dist
+RUN node dist/main.js download-files
 CMD ["node", "dist/main.js", "start"]
