@@ -1,11 +1,7 @@
-FROM node:22-slim
+FROM node:22-bookworm
 
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
-
-RUN apt-get update -qq \
-    && apt-get install --no-install-recommends -y ca-certificates libatomic1 \
-    && rm -rf /var/lib/apt/lists/*
 
 RUN npm install -g pnpm@10
 
