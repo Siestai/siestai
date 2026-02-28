@@ -339,15 +339,20 @@ export default defineAgent({
         throw error;
       }
 
-      const participant = await ctx.waitForParticipant();
-      logger.info(
-        { identity: participant.identity },
-        'Participant joined — sending initial greeting',
-      );
-
-      session.generateReply({
-        userInput: '[System: Greet the user and offer your assistance.]',
-      });
+      // Do not block on waitForParticipant() here; dispatch can happen after
+      // the user already joined, which would deadlock the opening turn.
+      setTimeout(() => {
+        try {
+          session.generateReply({
+            userInput: '[System: Greet the user and offer your assistance.]',
+          });
+        } catch (err) {
+          logger.warn(
+            { error: err instanceof Error ? err.message : String(err) },
+            'Failed to send initial greeting',
+          );
+        }
+      }, 500);
       return;
     }
 
@@ -445,17 +450,21 @@ export default defineAgent({
         );
       }
     } else {
-      // Human collaboration mode: wait for participant and send greeting
-      const participant = await ctx.waitForParticipant();
-      logger.info(
-        { identity: participant.identity },
-        'Arena participant joined — sending opening turn',
-      );
-
+      // Do not block on waitForParticipant() here; the participant may
+      // already be in-room before this worker starts.
       const greeting = buildArenaGreeting(arenaMetadata);
-      session.generateReply({
-        userInput: `[System: ${greeting} Keep it brief (1-2 sentences).]`,
-      });
+      setTimeout(() => {
+        try {
+          session.generateReply({
+            userInput: `[System: ${greeting} Keep it brief (1-2 sentences).]`,
+          });
+        } catch (err) {
+          logger.warn(
+            { error: err instanceof Error ? err.message : String(err) },
+            'Failed to send arena opening turn',
+          );
+        }
+      }, 500);
     }
   },
 });
