@@ -1,28 +1,11 @@
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
 import { Users, Phone, Bot, Plus, Zap } from "lucide-react";
 import Link from "next/link";
 import type { Agent } from "@/lib/types";
 import { ActivityFeed } from "@/components/dashboard/activity-feed";
-
-const recentAgents: Agent[] = [
-  {
-    id: "1", name: "Atlas", description: "Technical assistant for engineering questions and code analysis.", instructions: "",
-    tags: ["engineering", "code"], color: "#3b82f6", icon: "brain", category: "technical",
-    source: "mastra", llmModel: null, isOnline: true,
-    createdAt: "2025-01-15T10:00:00Z", updatedAt: "2025-02-20T14:30:00Z",
-  },
-  {
-    id: "2", name: "Nova", description: "Creative writing and brainstorming companion.", instructions: "",
-    tags: ["creativity", "arts"], color: "#8b5cf6", icon: "sparkles", category: "creative",
-    source: "mastra", llmModel: null, isOnline: true,
-    createdAt: "2025-01-20T08:00:00Z", updatedAt: "2025-02-19T11:00:00Z",
-  },
-  {
-    id: "3", name: "Sage", description: "Thoughtful conversational companion for any topic.", instructions: "",
-    tags: ["conversation", "talk"], color: "#22c55e", icon: "messages", category: "conversational",
-    source: "mastra", llmModel: null, isOnline: true,
-    createdAt: "2025-01-05T09:00:00Z", updatedAt: "2025-02-22T10:00:00Z",
-  },
-];
+import { api } from "@/lib/api";
 
 function StatCard({
   label,
@@ -135,6 +118,53 @@ function AgentPreview({ agent }: { agent: Agent }) {
 }
 
 export default function DashboardPage() {
+  const [agents, setAgents] = useState<Agent[]>([]);
+  const [loadingAgents, setLoadingAgents] = useState(true);
+  const [agentsError, setAgentsError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadAgents = async () => {
+      try {
+        setLoadingAgents(true);
+        setAgentsError(null);
+        const data = await api.listAgents();
+        if (isMounted) {
+          setAgents(data);
+        }
+      } catch (err) {
+        if (isMounted) {
+          setAgentsError(
+            err instanceof Error ? err.message : "Failed to load dashboard data",
+          );
+        }
+      } finally {
+        if (isMounted) {
+          setLoadingAgents(false);
+        }
+      }
+    };
+
+    loadAgents();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const stats = useMemo(() => {
+    const activeAgents = agents.filter((agent) => agent.isOnline).length;
+    const categories = new Set(agents.map((agent) => agent.category)).size;
+    return {
+      activeAgents,
+      totalAgents: agents.length,
+      categories,
+    };
+  }, [agents]);
+
+  const recentAgents = useMemo(() => agents.slice(0, 3), [agents]);
+
   return (
     <div className="flex flex-col gap-8 px-6 md:px-12 py-8">
       {/* Header */}
@@ -156,9 +186,9 @@ export default function DashboardPage() {
 
       {/* Stats Row */}
       <div className="flex gap-4 flex-col sm:flex-row">
-        <StatCard label="Active Agents" value={4} />
-        <StatCard label="Total Chats" value={12} />
-        <StatCard label="Arena Sessions" value={3} />
+        <StatCard label="Active Agents" value={loadingAgents ? "..." : stats.activeAgents} />
+        <StatCard label="Total Agents" value={loadingAgents ? "..." : stats.totalAgents} />
+        <StatCard label="Categories" value={loadingAgents ? "..." : stats.categories} />
       </div>
 
       {/* Quick Actions */}
@@ -191,11 +221,23 @@ export default function DashboardPage() {
         >
           Recent Agents
         </span>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {recentAgents.map((agent) => (
-            <AgentPreview key={agent.id} agent={agent} />
-          ))}
-        </div>
+        {agentsError ? (
+          <div className="rounded-xl border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+            {agentsError}
+          </div>
+        ) : loadingAgents ? (
+          <div className="text-sm text-muted-foreground">Loading agents...</div>
+        ) : recentAgents.length === 0 ? (
+          <div className="text-sm text-muted-foreground">
+            No agents yet. Create one to get started.
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {recentAgents.map((agent) => (
+              <AgentPreview key={agent.id} agent={agent} />
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Activity Feed */}
