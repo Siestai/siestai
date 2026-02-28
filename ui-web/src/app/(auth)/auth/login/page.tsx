@@ -37,7 +37,13 @@ export default function LoginPage() {
     );
   }
 
-  if (session) return null;
+  if (session) {
+    return (
+      <div className="flex items-center justify-center">
+        <Loader2 className="h-6 w-6 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col items-center justify-center gap-0 w-full px-4">
