@@ -1,4 +1,4 @@
-import { eq, ilike, or, sql } from 'drizzle-orm';
+import { eq, ilike, or, and, sql, type SQL } from 'drizzle-orm';
 import { db, schema } from '../db/index.js';
 import type { NewAgent } from '../db/schema.js';
 
@@ -10,15 +10,23 @@ export async function listAgents(params?: {
 }) {
   let query = db.select().from(agents).$dynamic();
 
+  const conditions: SQL[] = [];
+
   if (params?.category) {
-    query = query.where(eq(agents.category, params.category));
+    conditions.push(eq(agents.category, params.category));
   }
 
   if (params?.search) {
     const pattern = `%${params.search}%`;
-    query = query.where(
-      or(ilike(agents.name, pattern), ilike(agents.description, pattern)),
+    const searchCondition = or(
+      ilike(agents.name, pattern),
+      ilike(agents.description, pattern),
     );
+    if (searchCondition) conditions.push(searchCondition);
+  }
+
+  if (conditions.length > 0) {
+    query = query.where(and(...conditions));
   }
 
   return query;
