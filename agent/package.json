@@ -9,6 +9,7 @@
   "scripts": {
     "dev": "npx tsx src/main.ts dev",
     "build": "tsc",
+    "download-files": "node dist/main.js download-files",
     "start": "node dist/main.js start",
     "test": "vitest run"
   },

@@ -4,7 +4,7 @@ ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
 
 RUN apt-get update -qq \
-    && apt-get install --no-install-recommends -y ca-certificates \
+    && apt-get install --no-install-recommends -y ca-certificates libatomic1 \
     && rm -rf /var/lib/apt/lists/*
 
 RUN npm install -g pnpm@10
@@ -29,7 +29,7 @@ RUN adduser \
 RUN chown -R appuser:appuser /app
 USER appuser
 
-RUN node dist/main.js download-files
+RUN pnpm download-files
 
 USER root
 RUN pnpm prune --prod && chown -R appuser:appuser /app
