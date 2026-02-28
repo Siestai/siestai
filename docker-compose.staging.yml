@@ -56,6 +56,7 @@ services:
       ARENA_INVITE_SECRET: ${ARENA_INVITE_SECRET}
       FRONTEND_URL: https://staging.siestai.com
       DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgres}@postgres:5432/siestai
+      BETTER_AUTH_URL: https://api-staging.siestai.com
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
