@@ -33,13 +33,40 @@ services:
   backend:
     build:
       context: ./backend
+      dockerfile: Dockerfile
     restart: unless-stopped
     ports:
       - "4200:4200"
     depends_on:
       - mastra
     environment:
+      PORT: 4200
       MASTRA_URL: http://mastra:4111
+      LIVEKIT_URL: ${LIVEKIT_URL}
+      LIVEKIT_API_KEY: ${LIVEKIT_API_KEY}
+      LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET}
+      ARENA_INVITE_SECRET: ${ARENA_INVITE_SECRET}
+      FRONTEND_URL: https://staging.siestai.com
+
+  ui-web:
+    build:
+      context: ./ui-web
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: https://api.staging.siestai.com
+        NEXT_PUBLIC_LIVEKIT_URL: wss://siestai-qk2c7bgk.livekit.cloud
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+
+  agent:
+    build:
+      context: ./agent
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      - backend
+    environment:
       LIVEKIT_URL: ${LIVEKIT_URL}
       LIVEKIT_API_KEY: ${LIVEKIT_API_KEY}
       LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET}
