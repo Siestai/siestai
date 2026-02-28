@@ -1,6 +1,10 @@
 import { Injectable, InternalServerErrorException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { AccessToken, RoomServiceClient } from 'livekit-server-sdk';
+import {
+  AccessToken,
+  AgentDispatchClient,
+  RoomServiceClient,
+} from 'livekit-server-sdk';
 import { RoomAgentDispatch, RoomConfiguration } from '@livekit/protocol';
 import { CreateTokenDto } from './dto/create-token.dto';
 // TODO: Consider moving ArenaSession to a shared types folder if more cross-module deps emerge
@@ -10,6 +14,7 @@ import { randomBytes } from 'crypto';
 @Injectable()
 export class LivekitService {
   private roomService: RoomServiceClient;
+  private dispatchService: AgentDispatchClient;
 
   constructor(private readonly configService: ConfigService) {
     const url = this.configService.get<string>('LIVEKIT_URL') || '';
@@ -19,6 +24,7 @@ export class LivekitService {
     const apiKey = this.configService.get<string>('LIVEKIT_API_KEY') || '';
     const apiSecret = this.configService.get<string>('LIVEKIT_API_SECRET') || '';
     this.roomService = new RoomServiceClient(httpUrl, apiKey, apiSecret);
+    this.dispatchService = new AgentDispatchClient(httpUrl, apiKey, apiSecret);
   }
 
   /** Strip characters that aren't alphanumeric, hyphens, or underscores. */
@@ -96,6 +102,7 @@ export class LivekitService {
     }
 
     await this.roomService.createRoom({ name: roomName, metadata });
+    await this.dispatchService.createDispatch(roomName, 'siestai-agent');
 
     const at = new AccessToken(apiKey, apiSecret, { identity });
 

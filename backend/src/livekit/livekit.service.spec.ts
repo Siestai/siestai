@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
 import { InternalServerErrorException } from '@nestjs/common';
 import { LivekitService } from './livekit.service';
+import { ArenaSession } from '../arena/arena.interfaces';
 
 function decodeJwtPayload(token: string): Record<string, unknown> {
   const parts = token.split('.');
@@ -125,6 +126,56 @@ describe('LivekitService', () => {
 
       expect(result.token).toBeTruthy();
       // Token was generated successfully with participantName
+    });
+  });
+
+  describe('generateArenaToken', () => {
+    const sampleArenaSession: ArenaSession = {
+      id: 'arena-session-1',
+      topic: 'AI ethics',
+      mode: 'group',
+      participationMode: 'human_collab',
+      status: 'waiting',
+      participants: [
+        {
+          id: 'p1',
+          name: 'Atlas',
+          type: 'native_agent',
+          instructions: 'Technical perspective',
+          status: 'invited',
+          color: '#3b82f6',
+        },
+      ],
+      createdAt: new Date().toISOString(),
+      expiresAt: new Date(Date.now() + 3600_000).toISOString(),
+    };
+
+    it('should create room and dispatch siestai-agent', async () => {
+      const createRoom = jest.fn().mockResolvedValue(undefined);
+      const createDispatch = jest.fn().mockResolvedValue(undefined);
+
+      // Override network clients to keep unit test isolated.
+      (
+        service as unknown as { roomService: { createRoom: typeof createRoom } }
+      ).roomService = { createRoom };
+      (
+        service as unknown as {
+          dispatchService: { createDispatch: typeof createDispatch };
+        }
+      ).dispatchService = { createDispatch };
+
+      const result = await service.generateArenaToken(sampleArenaSession);
+
+      expect(result).toHaveProperty('token');
+      expect(result).toHaveProperty('serverUrl', 'wss://test.livekit.cloud');
+      expect(result.roomName).toMatch(/^arena-/);
+
+      expect(createRoom).toHaveBeenCalledTimes(1);
+      expect(createDispatch).toHaveBeenCalledTimes(1);
+      expect(createDispatch).toHaveBeenCalledWith(
+        result.roomName,
+        'siestai-agent',
+      );
     });
   });
 });
