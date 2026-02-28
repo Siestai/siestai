@@ -1,78 +1,124 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
-import { HttpService } from '@nestjs/axios';
-import { firstValueFrom } from 'rxjs';
+import { Injectable, NotFoundException, OnModuleInit } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { Pool } from 'pg';
 import { CreateAgentDto } from './dto/create-agent.dto';
 import { UpdateAgentDto } from './dto/update-agent.dto';
 
 @Injectable()
-export class AgentsService {
-  constructor(private readonly http: HttpService) {}
+export class AgentsService implements OnModuleInit {
+  private pool: Pool;
+
+  constructor(private readonly config: ConfigService) {}
+
+  onModuleInit() {
+    this.pool = new Pool({
+      connectionString: this.config.get('DATABASE_URL'),
+    });
+  }
 
   async listAgents(params?: { category?: string; search?: string }) {
-    const { data } = await firstValueFrom(
-      this.http.get('/custom/agents', { params }),
+    const conditions: string[] = [];
+    const values: any[] = [];
+    let idx = 1;
+
+    if (params?.category) {
+      conditions.push(`category = $${idx++}`);
+      values.push(params.category);
+    }
+    if (params?.search) {
+      conditions.push(`(name ILIKE $${idx} OR description ILIKE $${idx})`);
+      values.push(`%${params.search}%`);
+      idx++;
+    }
+
+    const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+    const { rows } = await this.pool.query(
+      `SELECT * FROM agents ${where} ORDER BY created_at DESC`,
+      values,
     );
-    return data;
+    return rows;
   }
 
   async getAgent(id: string) {
-    try {
-      const { data } = await firstValueFrom(
-        this.http.get(`/custom/agents/${id}`),
-      );
-      return data;
-    } catch (err: any) {
-      if (err?.response?.status === 404) {
-        throw new NotFoundException('Agent not found');
-      }
-      throw err;
+    const { rows } = await this.pool.query(
+      'SELECT * FROM agents WHERE id = $1',
+      [id],
+    );
+    if (rows.length === 0) {
+      throw new NotFoundException('Agent not found');
     }
+    return rows[0];
   }
 
   async createAgent(dto: CreateAgentDto) {
-    const { data } = await firstValueFrom(
-      this.http.post('/custom/agents', dto),
+    const { rows } = await this.pool.query(
+      `INSERT INTO agents (name, description, instructions, category, tags, color, icon, source, llm_model)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+       RETURNING *`,
+      [
+        dto.name,
+        dto.description ?? '',
+        dto.instructions,
+        dto.category ?? 'conversational',
+        JSON.stringify(dto.tags ?? []),
+        dto.color ?? '#3b82f6',
+        dto.icon ?? 'bot',
+        dto.source ?? 'mastra',
+        dto.llmModel ?? null,
+      ],
     );
-    return data;
+    return rows[0];
   }
 
   async updateAgent(id: string, dto: UpdateAgentDto) {
-    try {
-      const { data } = await firstValueFrom(
-        this.http.put(`/custom/agents/${id}`, dto),
-      );
-      return data;
-    } catch (err: any) {
-      if (err?.response?.status === 404) {
-        throw new NotFoundException('Agent not found');
+    const sets: string[] = [];
+    const values: any[] = [];
+    let idx = 1;
+
+    const fields: [string, any][] = [
+      ['name', dto.name],
+      ['description', dto.description],
+      ['instructions', dto.instructions],
+      ['category', dto.category],
+      ['tags', dto.tags ? JSON.stringify(dto.tags) : undefined],
+      ['color', dto.color],
+      ['icon', dto.icon],
+      ['source', dto.source],
+      ['llm_model', dto.llmModel],
+    ];
+
+    for (const [col, val] of fields) {
+      if (val !== undefined) {
+        sets.push(`${col} = $${idx++}`);
+        values.push(val);
       }
-      throw err;
     }
+
+    if (sets.length === 0) {
+      return this.getAgent(id);
+    }
+
+    sets.push(`updated_at = now()`);
+    values.push(id);
+
+    const { rows } = await this.pool.query(
+      `UPDATE agents SET ${sets.join(', ')} WHERE id = $${idx} RETURNING *`,
+      values,
+    );
+    if (rows.length === 0) {
+      throw new NotFoundException('Agent not found');
+    }
+    return rows[0];
   }
 
   async deleteAgent(id: string) {
-    try {
-      const { data } = await firstValueFrom(
-        this.http.delete(`/custom/agents/${id}`),
-      );
-      return data;
-    } catch (err: any) {
-      if (err?.response?.status === 404) {
-        throw new NotFoundException('Agent not found');
-      }
-      throw err;
-    }
-  }
-
-  async streamAgent(
-    id: string,
-    messages: { role: string; content: string }[],
-  ) {
-    const response = await firstValueFrom(
-      this.http.post(`/custom/agents/${id}/stream`, { messages }, {
-        responseType: 'stream',
-      }),
+    const { rows } = await this.pool.query(
+      'DELETE FROM agents WHERE id = $1 RETURNING id',
+      [id],
     );
-    return response.data;
+    if (rows.length === 0) {
+      throw new NotFoundException('Agent not found');
+    }
+    return { ok: true };
   }
 }

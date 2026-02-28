@@ -7,9 +7,7 @@ import {
   Post,
   Put,
   Query,
-  Res,
 } from '@nestjs/common';
-import type { Response } from 'express';
 import { AgentsService } from './agents.service';
 import { CreateAgentDto } from './dto/create-agent.dto';
 import { UpdateAgentDto } from './dto/update-agent.dto';
@@ -44,20 +42,5 @@ export class AgentsController {
   @Delete(':id')
   deleteAgent(@Param('id') id: string) {
     return this.agentsService.deleteAgent(id);
-  }
-
-  @Post(':id/stream')
-  async streamAgent(
-    @Param('id') id: string,
-    @Body() body: { messages: { role: string; content: string }[] },
-    @Res() res: Response,
-  ) {
-    const stream = await this.agentsService.streamAgent(id, body.messages);
-
-    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-    res.setHeader('Cache-Control', 'no-cache');
-    res.setHeader('Connection', 'keep-alive');
-
-    stream.pipe(res);
   }
 }

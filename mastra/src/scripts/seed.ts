@@ -1,5 +1,27 @@
-import { db } from '../db/index.js';
-import { agents } from '../db/schema.js';
+import { readFileSync } from 'fs';
+import { resolve, dirname } from 'path';
+import { fileURLToPath } from 'url';
+
+// Load .env before importing db (which reads DATABASE_URL at import time).
+// drizzle-kit loads .env automatically; tsx does not.
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const envPath = resolve(__dirname, '../../.env');
+try {
+  const envContent = readFileSync(envPath, 'utf-8');
+  for (const line of envContent.split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    const eqIndex = trimmed.indexOf('=');
+    if (eqIndex === -1) continue;
+    const key = trimmed.slice(0, eqIndex);
+    const val = trimmed.slice(eqIndex + 1);
+    if (!process.env[key]) process.env[key] = val;
+  }
+} catch {}
+
+// Dynamic import so DATABASE_URL is set before the Pool is created
+const { db } = await import('../db/index.js');
+const { agents } = await import('../db/schema.js');
 
 const seedAgents = [
   {
