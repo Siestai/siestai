@@ -1,6 +1,6 @@
-import { cli, defineAgent, inference, log, ServerOptions, voice } from '@livekit/agents';
+import { cli, defineAgent, log, ServerOptions, voice } from '@livekit/agents';
 import { VAD } from '@livekit/agents-plugin-silero';
-import { TTS as OpenAITTS } from '@livekit/agents-plugin-openai';
+import { LLM as OpenAILLM, STT as OpenAISTT, TTS as OpenAITTS } from '@livekit/agents-plugin-openai';
 import { turnDetector } from '@livekit/agents-plugin-livekit';
 import { BackgroundVoiceCancellation } from '@livekit/noise-cancellation-node';
 import { fileURLToPath } from 'node:url';
@@ -8,6 +8,7 @@ import dotenv from 'dotenv';
 import { Agent } from './agent.js';
 import { ArenaAgent, type ArenaMetadata, buildArenaGreeting } from './arena-agent.js';
 import { MultiVoiceTTS } from './multi-voice-tts.js';
+import { DIRECT_PROVIDER_CONFIG } from './provider-config.js';
 
 dotenv.config({ path: '.env.local' });
 
@@ -301,9 +302,15 @@ export default defineAgent({
     if (!arenaMetadata) {
       const agent = new Agent();
       const session = new voice.AgentSession({
-        stt: new inference.STT({ model: 'deepgram/nova-3', language: 'multi' }),
-        llm: new inference.LLM({ model: 'openai/gpt-4.1-mini' }),
-        tts: new inference.TTS({ model: 'cartesia/sonic-3', voice: '9626c31c-bec5-4cca-baa8-f8ba9e84c8bc' }),
+        stt: new OpenAISTT({
+          model: DIRECT_PROVIDER_CONFIG.sttModel,
+          detectLanguage: true,
+        }),
+        llm: new OpenAILLM({ model: DIRECT_PROVIDER_CONFIG.llmModel }),
+        tts: new OpenAITTS({
+          model: DIRECT_PROVIDER_CONFIG.ttsModel,
+          voice: DIRECT_PROVIDER_CONFIG.singleAgentVoice,
+        }),
         vad: ctx.proc.userData.vad as VAD,
         turnDetection: new turnDetector.MultilingualModel(),
         voiceOptions: {
@@ -369,7 +376,7 @@ export default defineAgent({
       const persona = arenaMetadata.agents[i];
       const voiceName = OPENAI_ARENA_VOICES[i % OPENAI_ARENA_VOICES.length];
       const cloudTTS = new OpenAITTS({
-        model: 'gpt-4o-mini-tts',
+        model: DIRECT_PROVIDER_CONFIG.ttsModel,
         voice: voiceName,
         instructions: buildCloudTTSInstructions(persona.name, persona.instructions),
       });
@@ -382,8 +389,11 @@ export default defineAgent({
     );
 
     const session = new voice.AgentSession({
-      stt: new inference.STT({ model: 'deepgram/nova-3', language: 'multi' }),
-      llm: new inference.LLM({ model: 'openai/gpt-4.1-mini' }),
+      stt: new OpenAISTT({
+        model: DIRECT_PROVIDER_CONFIG.sttModel,
+        detectLanguage: true,
+      }),
+      llm: new OpenAILLM({ model: DIRECT_PROVIDER_CONFIG.llmModel }),
       tts: multiVoiceTTS,
       vad: ctx.proc.userData.vad as VAD,
       turnDetection: new turnDetector.MultilingualModel(),
