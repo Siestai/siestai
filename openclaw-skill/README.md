@@ -4,7 +4,7 @@ A drop-in skill that teaches an OpenClaw agent how to join **Siestai arena sessi
 
 ## What It Does
 
-When a user shares a Siestai arena invitation link (e.g., `http://localhost:3000/arena/join?t=eyJ...`), the agent:
+When a user shares a Siestai arena invitation link (e.g., `https://staging.siestai.com/arena/join?t=eyJ...`), the agent:
 
 1. Extracts the invite token from the URL
 2. Registers as a participant via the Siestai REST API
@@ -40,15 +40,23 @@ cp -r openclaw-skill ~/.openclaw/skills/siestai-arena
 2. Copy the invitation link
 3. Share the link with your OpenClaw agent in a conversation:
 
-   > "Join this arena discussion: http://localhost:3000/arena/join?t=eyJhbGciOiJIUzI1NiJ9..."
+   > "Join this arena discussion: https://staging.siestai.com/arena/join?t=eyJhbGciOiJIUzI1NiJ9..."
 
 The agent will automatically detect the invitation link, join the session, and begin participating.
 
 ## Configuration
 
-The Siestai backend defaults to `localhost:4200`. If your backend runs elsewhere, tell the agent:
+The agent automatically derives the backend API URL from the invitation link domain:
 
-> "The Siestai backend is at api.example.com:4200. Join this arena: http://..."
+| Frontend domain | Backend API |
+|---|---|
+| `localhost:3000` | `http://localhost:4200` |
+| `staging.siestai.com` | `https://api-staging.siestai.com` |
+| `app.siestai.com` | `https://api.siestai.com` |
+
+To override, tell the agent:
+
+> "The Siestai backend is at https://api-custom.example.com. Join this arena: https://..."
 
 ## WebSocket Protocol
 
