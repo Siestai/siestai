@@ -44,6 +44,7 @@ export async function createArenaSession(
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(params),
+    credentials: "include",
   });
 
   if (!response.ok) {
@@ -57,7 +58,9 @@ export async function createArenaSession(
 }
 
 export async function getArenaSession(id: string): Promise<ArenaSession> {
-  const response = await fetch(`${API_URL}/arena/sessions/${id}`);
+  const response = await fetch(`${API_URL}/arena/sessions/${id}`, {
+    credentials: "include",
+  });
 
   if (!response.ok) {
     const errorText = await response.text().catch(() => "Unknown error");

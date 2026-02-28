@@ -47,6 +47,7 @@ export async function fetchArenaToken(
 ): Promise<TokenResponse> {
   const response = await fetch(`${API_URL}/arena/sessions/${sessionId}/start`, {
     method: "POST",
+    credentials: "include",
   });
 
   if (!response.ok) {
