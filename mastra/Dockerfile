@@ -13,5 +13,6 @@ COPY --from=build /app/package.json /app/pnpm-lock.yaml ./
 RUN pnpm install --frozen-lockfile --prod
 COPY --from=build /app/.mastra ./.mastra
 COPY --from=build /app/drizzle ./drizzle
+COPY --from=build /app/entrypoint.sh ./entrypoint.sh
 EXPOSE 4111
-CMD ["node", ".mastra/output/index.mjs"]
+CMD ["sh", "entrypoint.sh"]
