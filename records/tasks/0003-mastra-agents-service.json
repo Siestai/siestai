@@ -15,7 +15,7 @@
       ],
       "files": ["mastra/package.json", "mastra/tsconfig.json", "mastra/.env.example"],
       "verify": "cd mastra && pnpm install && pnpm exec tsc --noEmit 2>&1 | head -20",
-      "done": false
+      "done": true
     },
     {
       "id": 2,
@@ -30,7 +30,7 @@
       ],
       "files": ["mastra/src/db/schema.ts", "mastra/src/db/index.ts", "mastra/drizzle.config.ts"],
       "verify": "cd mastra && pnpm exec tsc --noEmit --pretty 2>&1 | head -20",
-      "done": false
+      "done": true
     },
     {
       "id": 3,
@@ -46,7 +46,7 @@
       ],
       "files": ["mastra/src/agents/agent-crud.ts"],
       "verify": "cd mastra && pnpm exec tsc --noEmit --pretty 2>&1 | head -20",
-      "done": false
+      "done": true
     },
     {
       "id": 4,
@@ -62,7 +62,7 @@
       ],
       "files": ["mastra/src/mastra/index.ts", "mastra/src/mastra/agents/default-agent.ts"],
       "verify": "cd mastra && pnpm exec tsc --noEmit --pretty 2>&1 | head -20",
-      "done": false
+      "done": true
     },
     {
       "id": 5,
@@ -76,7 +76,7 @@
       ],
       "files": ["mastra/src/agents/runtime.ts", "mastra/src/mastra/index.ts"],
       "verify": "cd mastra && pnpm exec tsc --noEmit --pretty 2>&1 | head -20",
-      "done": false
+      "done": true
     },
     {
       "id": 6,
@@ -102,7 +102,7 @@
         "backend/src/app.module.ts"
       ],
       "verify": "cd backend && pnpm exec tsc --noEmit --pretty 2>&1 | head -20",
-      "done": false
+      "done": true
     },
     {
       "id": 7,
@@ -118,7 +118,7 @@
       ],
       "files": ["ui-web/src/lib/types.ts", "ui-web/src/lib/api.ts", "ui-web/src/components/agents/agent-card.tsx"],
       "verify": "cd ui-web && pnpm exec tsc --noEmit --pretty 2>&1 | head -20",
-      "done": false
+      "done": true
     },
     {
       "id": 8,
@@ -136,11 +136,12 @@
       ],
       "files": [
         "ui-web/src/components/agents/agent-form-dialog.tsx",
+        "ui-web/src/components/agents/delete-agent-dialog.tsx",
         "ui-web/src/app/agents/page.tsx",
         "ui-web/src/components/agents/agent-card.tsx"
       ],
       "verify": "cd ui-web && pnpm exec tsc --noEmit --pretty 2>&1 | head -20",
-      "done": false
+      "done": true
     },
     {
       "id": 9,
@@ -158,7 +159,7 @@
       ],
       "files": ["ui-web/src/components/arena/agent-picker.tsx", "ui-web/src/app/arena/page.tsx"],
       "verify": "cd ui-web && pnpm exec tsc --noEmit --pretty 2>&1 | head -20",
-      "done": false
+      "done": true
     },
     {
       "id": 10,
@@ -174,7 +175,7 @@
       ],
       "files": ["docker-compose.dev.yml", "docker-compose.staging.yml", ".env.staging.example", "mastra/Dockerfile"],
       "verify": "docker compose -f docker-compose.dev.yml config 2>&1 | head -5",
-      "done": false
+      "done": true
     },
     {
       "id": 11,
@@ -191,7 +192,7 @@
       ],
       "files": ["mastra/src/scripts/seed.ts", "mastra/package.json"],
       "verify": "cd mastra && pnpm exec tsc --noEmit --pretty 2>&1 | head -20",
-      "done": false
+      "done": true
     }
   ]
 }
