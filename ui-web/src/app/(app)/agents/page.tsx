@@ -4,7 +4,6 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { Bot, Plus, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { AgentCard } from "@/components/agents/agent-card";
 import { AgentFormDialog } from "@/components/agents/agent-form-dialog";
 import { DeleteAgentDialog } from "@/components/agents/delete-agent-dialog";
@@ -22,7 +21,6 @@ export default function AgentsPage() {
   const [selectedCategory, setSelectedCategory] = useState("all");
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
-  // Dialog state
   const [formOpen, setFormOpen] = useState(false);
   const [editAgent, setEditAgent] = useState<Agent | undefined>(undefined);
   const [deleteAgent, setDeleteAgent] = useState<Agent | null>(null);
@@ -88,37 +86,40 @@ export default function AgentsPage() {
   };
 
   return (
-    <div className="container mx-auto px-4 py-6 lg:px-6 lg:py-8">
+    <div className="flex flex-col gap-6 px-6 md:px-12 py-8">
       {/* Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-6">
-        <div>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-1">
           <h1 className="text-2xl font-semibold text-foreground">Agents</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Create and manage your AI conversation agents
+          <p className="text-sm text-muted-foreground">
+            Manage your AI voice agents.
           </p>
         </div>
-        <Button className="gap-2 shrink-0" onClick={handleCreate}>
+        <button
+          className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 shrink-0"
+          onClick={handleCreate}
+        >
           <Plus className="h-4 w-4" />
-          Create Agent
-        </Button>
+          New Agent
+        </button>
       </div>
 
       {/* Filter Bar */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center mb-6">
-        <div className="relative flex-1 sm:flex-none">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <div className="relative flex-none">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
+          <input
             placeholder="Search agents..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-9 w-full sm:w-[240px] bg-secondary border-border"
+            className="h-9 w-full sm:w-[280px] rounded-lg border border-border bg-card pl-9 pr-3 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary/50 transition-colors"
           />
         </div>
-        <div className="flex flex-wrap gap-1.5">
+        <div className="flex flex-wrap gap-2">
           <button
             onClick={() => setSelectedCategory("all")}
             className={cn(
-              "px-3 py-1.5 text-xs rounded-md border transition-colors",
+              "px-3 py-1.5 text-xs font-medium rounded-md border transition-colors",
               selectedCategory === "all"
                 ? "bg-secondary border-primary/50 text-foreground"
                 : "bg-transparent border-border text-muted-foreground hover:text-foreground"
@@ -131,7 +132,7 @@ export default function AgentsPage() {
               key={cat.value}
               onClick={() => setSelectedCategory(cat.value)}
               className={cn(
-                "px-3 py-1.5 text-xs rounded-md border transition-colors",
+                "px-3 py-1.5 text-xs font-medium rounded-md border transition-colors capitalize",
                 selectedCategory === cat.value
                   ? "bg-secondary border-primary/50 text-foreground"
                   : "bg-transparent border-border text-muted-foreground hover:text-foreground"
@@ -145,7 +146,7 @@ export default function AgentsPage() {
 
       {/* Error */}
       {error && (
-        <div className="mb-6 flex items-center gap-2 text-destructive bg-destructive/10 px-4 py-3 rounded-lg">
+        <div className="flex items-center gap-2 text-destructive bg-destructive/10 px-4 py-3 rounded-lg">
           <span className="flex-1 text-sm">{error}</span>
           <Button
             variant="ghost"
@@ -158,10 +159,10 @@ export default function AgentsPage() {
         </div>
       )}
 
-      {/* Loading State */}
+      {/* Content */}
       {loading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {[1, 2, 3].map((i) => (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          {[1, 2, 3, 4].map((i) => (
             <AgentCard key={i} loading />
           ))}
         </div>
@@ -198,7 +199,7 @@ export default function AgentsPage() {
           )}
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {agents.map((agent) => (
             <AgentCard
               key={agent.id}
@@ -211,7 +212,6 @@ export default function AgentsPage() {
         </div>
       )}
 
-      {/* Create / Edit dialog */}
       <AgentFormDialog
         open={formOpen}
         onOpenChange={setFormOpen}
@@ -219,7 +219,6 @@ export default function AgentsPage() {
         onSaved={handleSaved}
       />
 
-      {/* Delete confirmation dialog */}
       {deleteAgent && (
         <DeleteAgentDialog
           open={!!deleteAgent}

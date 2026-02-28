@@ -154,15 +154,15 @@ function ArenaPageContent() {
   // --- Setup wizard ---
   if (pageState === "setup") {
     return (
-      <div className="container mx-auto px-4 py-6 lg:px-6 lg:py-8">
+      <div className="flex flex-col gap-6 px-6 md:px-12 py-8">
         {/* Header */}
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-8">
-          <div>
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col gap-1">
             <h1 className="text-2xl font-semibold text-foreground">
-              Arena — Multi-Agent Conversation
+              Arena
             </h1>
-            <p className="text-muted-foreground mt-1">
-              Set up a group discussion between multiple AI agents
+            <p className="text-sm text-muted-foreground">
+              Multi-agent collaborative conversation.
             </p>
           </div>
           <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-secondary text-muted-foreground text-sm">

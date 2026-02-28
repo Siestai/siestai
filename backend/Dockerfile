@@ -12,5 +12,6 @@ RUN corepack enable && corepack prepare pnpm@latest --activate
 COPY --from=build /app/package.json /app/pnpm-lock.yaml ./
 RUN pnpm install --frozen-lockfile --prod
 COPY --from=build /app/dist ./dist
+COPY --from=build /app/migrate-auth.mjs ./migrate-auth.mjs
 EXPOSE 4200
-CMD ["node", "dist/main"]
+CMD ["sh", "-c", "node migrate-auth.mjs && node dist/main"]
