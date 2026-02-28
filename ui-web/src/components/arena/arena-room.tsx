@@ -229,6 +229,7 @@ export function ArenaRoom({
   onEndSession,
 }: ArenaRoomProps) {
   const { state: agentState } = useVoiceAssistant();
+  const { localParticipant, isMicrophoneEnabled } = useLocalParticipant();
   const { messages } = useConversationTranscript();
   const activeSpeaker = useActiveSpeaker(messages);
   const [startTime] = useState(() => Date.now());
@@ -236,6 +237,37 @@ export function ArenaRoom({
   const [unreadCount, setUnreadCount] = useState(0);
   const prevCountRef = useRef(messages.length);
   const [copied, setCopied] = useState(false);
+  const isHuman = participationMode === "human_collab";
+
+  const toggleMic = useCallback(async () => {
+    await localParticipant.setMicrophoneEnabled(!isMicrophoneEnabled);
+  }, [localParticipant, isMicrophoneEnabled]);
+
+  const onEndRef = useRef(onEndSession);
+  onEndRef.current = onEndSession;
+
+  useEffect(() => {
+    if (!isHuman) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (
+        e.target instanceof HTMLInputElement ||
+        e.target instanceof HTMLTextAreaElement
+      ) {
+        return;
+      }
+
+      if (e.code === "Space") {
+        e.preventDefault();
+        toggleMic();
+      } else if (e.code === "Escape") {
+        onEndRef.current();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isHuman, toggleMic]);
 
   const handleCopyInvite = useCallback(async () => {
     if (!inviteUrl) return;
@@ -334,16 +366,40 @@ export function ArenaRoom({
           ))}
         </div>
 
-        {/* End session button */}
-        <Button
-          variant="destructive"
-          size="lg"
-          onClick={onEndSession}
-          className="rounded-full gap-2"
-        >
-          <PhoneOff className="h-4 w-4" />
-          End Session
-        </Button>
+        {/* Controls */}
+        <div className="flex flex-col items-center gap-3">
+          <div className="flex items-center gap-4">
+            {isHuman && (
+              <Button
+                variant={isMicrophoneEnabled ? "secondary" : "destructive"}
+                size="lg"
+                onClick={toggleMic}
+                className="rounded-full h-12 w-12 p-0"
+                title={isMicrophoneEnabled ? "Mute (Space)" : "Unmute (Space)"}
+              >
+                {isMicrophoneEnabled ? (
+                  <Mic className="h-5 w-5" />
+                ) : (
+                  <MicOff className="h-5 w-5" />
+                )}
+              </Button>
+            )}
+            <Button
+              variant="outline"
+              size="lg"
+              onClick={onEndSession}
+              className="rounded-full h-12 w-12 p-0 text-destructive hover:bg-destructive hover:text-white"
+              title="End session (Esc)"
+            >
+              <PhoneOff className="h-5 w-5" />
+            </Button>
+          </div>
+          {isHuman && (
+            <p className="text-xs text-muted-foreground font-mono">
+              Space: mute | Esc: end
+            </p>
+          )}
+        </div>
       </div>
 
       {/* Transcript sidebar */}
