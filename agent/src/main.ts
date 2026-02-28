@@ -297,6 +297,14 @@ export default defineAgent({
     await ctx.connect();
 
     const arenaMetadata = parseArenaMetadata(ctx.room.metadata);
+    logger.info(
+      {
+        room: roomName,
+        hasArenaMetadata: Boolean(arenaMetadata),
+        metadataBytes: Buffer.byteLength(ctx.room.metadata ?? '', 'utf8'),
+      },
+      'Connected to room',
+    );
 
     // ── Non-arena (single agent) flow ──────────────────────────────
     if (!arenaMetadata) {
@@ -440,11 +448,23 @@ export default defineAgent({
 
     // Agent-only mode: wait for participant then kick off conversation
     if (isAgentOnly) {
-      const participant = await ctx.waitForParticipant();
-      logger.info(
-        { identity: participant.identity },
-        'Arena observer joined — starting agent-only conversation',
-      );
+      // waitForParticipant can stall when observer was already present before dispatch;
+      // use a timeout fallback so agent-only sessions always start.
+      const participantOrTimeout = await Promise.race([
+        ctx.waitForParticipant(),
+        new Promise<null>((resolve) => setTimeout(() => resolve(null), 5000)),
+      ]);
+      if (participantOrTimeout) {
+        logger.info(
+          { identity: participantOrTimeout.identity },
+          'Arena observer joined — starting agent-only conversation',
+        );
+      } else {
+        logger.info(
+          { room: roomName },
+          'No new observer join event within timeout — starting agent-only conversation anyway',
+        );
+      }
 
       // Small delay to let the room settle
       await new Promise((resolve) => setTimeout(resolve, 1500));

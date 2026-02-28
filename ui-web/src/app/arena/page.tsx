@@ -686,7 +686,7 @@ function ArenaPageContent() {
           serverUrl={arenaSession.liveState.serverUrl}
           token={arenaSession.liveState.token}
           connect={true}
-          audio={participationMode === "human_collab"}
+          audio={true}
           options={ROOM_OPTIONS}
           onError={(err) => {
             console.error("LiveKitRoom error:", err);
