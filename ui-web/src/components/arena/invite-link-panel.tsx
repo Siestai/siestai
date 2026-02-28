@@ -54,9 +54,17 @@ export function InviteLinkPanel({
   const externalAgents = participants.filter(
     (p) => p.type === "external_agent",
   );
+  const nativeAgents = participants.filter(
+    (p) => p.type === "native_agent",
+  );
   const connectedCount = externalAgents.filter(
     (p) => p.status === "connected",
   ).length;
+
+  // Can start if we have at least 1 native agent or at least 1 connected external agent
+  // The total participants (including human host) will be at least 2 in many cases
+  // but even with 1 agent, we want to allow starting to wait for others or talk to one.
+  const canStart = nativeAgents.length > 0 || connectedCount > 0;
 
   return (
     <div className="rounded-xl border border-border/50 bg-card/30 p-6 space-y-5">
@@ -148,7 +156,7 @@ export function InviteLinkPanel({
       {/* Start Call button */}
       <Button
         onClick={onStartCall}
-        disabled={connectedCount === 0}
+        disabled={!canStart}
         className="w-full gap-2"
       >
         <Mic className="h-4 w-4" />

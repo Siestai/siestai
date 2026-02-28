@@ -85,12 +85,12 @@ export function AgentPicker({
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <p className="text-xs text-muted-foreground">
-          Select 2–{maxAgents} agents for the conversation
+          Select 1–{maxAgents} agents for the conversation
         </p>
         <span
           className={cn(
             "text-xs font-medium px-2 py-0.5 rounded-full",
-            selectedAgents.length >= 2
+            selectedAgents.length >= 1
               ? "bg-primary/15 text-primary"
               : "bg-secondary text-muted-foreground",
           )}

@@ -6,6 +6,11 @@
       "sourceType": "github",
       "computedHash": "39eaa7216d358c36e55b37c90a1dda916a891e6b294faa28d17e3511510b82d6"
     },
+    "better-auth-best-practices": {
+      "source": "better-auth/skills",
+      "sourceType": "github",
+      "computedHash": "a24359053259e55a75972cab4bf0b0e37e1393bac5f3756ec2e3a7b4b3778d2a"
+    },
     "frontend-design": {
       "source": "anthropics/skills",
       "sourceType": "github",

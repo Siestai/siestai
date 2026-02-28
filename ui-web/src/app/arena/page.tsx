@@ -70,9 +70,11 @@ function ArenaPageContent() {
 
   const canProceedFromStep = (s: number) => {
     if (s === 1) {
+      // Allow proceeding with at least 1 agent (native or manual)
+      // because external agents can be invited later.
       return configMode === "agents"
-        ? selectedAgents.length >= 2
-        : validManualAgents.length >= 2;
+        ? selectedAgents.length >= 1
+        : validManualAgents.length >= 1;
     }
     if (s === 2) return true;
     if (s === 3) return !agentOnlyNeedsTopic;
@@ -267,12 +269,12 @@ function ArenaPageContent() {
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
                       <p className="text-xs text-muted-foreground">
-                        Define 2–4 agents with name and instructions
+                        Define 1–4 agents with name and instructions
                       </p>
                       <span
                         className={cn(
                           "text-xs font-medium px-2 py-0.5 rounded-full",
-                          validManualAgents.length >= 2
+                          validManualAgents.length >= 1
                             ? "bg-primary/15 text-primary"
                             : "bg-secondary text-muted-foreground",
                         )}
