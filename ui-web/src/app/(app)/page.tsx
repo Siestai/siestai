@@ -1,138 +1,200 @@
-import { Users, Phone, Bot, Plus } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { QuickActionCard } from "@/components/dashboard/quick-action-card";
-import { AgentPreviewCard } from "@/components/dashboard/agent-preview-card";
-import { RecentActivityItem } from "@/components/dashboard/recent-activity-item";
-import { SystemStatus } from "@/components/dashboard/system-status";
+import { Users, Phone, Bot, Plus, Zap } from "lucide-react";
 import Link from "next/link";
 import type { Agent } from "@/lib/types";
 
-// Placeholder data for server component — replaced by real API calls in agents page
 const recentAgents: Agent[] = [
   {
-    id: "1", name: "Atlas", description: "Research assistant", instructions: "",
-    tags: ["research"], color: "#3b82f6", icon: "brain", category: "technical",
+    id: "1", name: "Atlas", description: "Technical assistant for engineering questions and code analysis.", instructions: "",
+    tags: ["engineering", "code"], color: "#3b82f6", icon: "brain", category: "technical",
     source: "mastra", llmModel: null, isOnline: true,
     createdAt: "2025-01-15T10:00:00Z", updatedAt: "2025-02-20T14:30:00Z",
   },
   {
-    id: "2", name: "Nova", description: "Creative storyteller", instructions: "",
-    tags: ["creative"], color: "#8b5cf6", icon: "sparkles", category: "creative",
+    id: "2", name: "Nova", description: "Creative writing and brainstorming companion.", instructions: "",
+    tags: ["creativity", "arts"], color: "#8b5cf6", icon: "sparkles", category: "creative",
     source: "mastra", llmModel: null, isOnline: true,
     createdAt: "2025-01-20T08:00:00Z", updatedAt: "2025-02-19T11:00:00Z",
   },
   {
-    id: "5", name: "Cipher", description: "Coding assistant", instructions: "",
-    tags: ["coding"], color: "#eab308", icon: "code", category: "technical",
+    id: "3", name: "Sage", description: "Thoughtful conversational companion for any topic.", instructions: "",
+    tags: ["conversation", "talk"], color: "#22c55e", icon: "messages", category: "conversational",
     source: "mastra", llmModel: null, isOnline: true,
     createdAt: "2025-01-05T09:00:00Z", updatedAt: "2025-02-22T10:00:00Z",
   },
 ];
 
-const recentActivity = [
-  { agentName: "Atlas", mode: "Live", duration: "5:20", timestamp: "Today" },
-  { agentName: "Axiom", mode: "Arena", duration: "3:00", timestamp: "Yesterday" },
-  { agentName: "Cipher", mode: "Live", duration: "10:00", timestamp: "2 days ago" },
-];
+function StatCard({
+  label,
+  value,
+}: {
+  label: string;
+  value: string | number;
+}) {
+  return (
+    <div className="flex-1 rounded-xl border border-border bg-card p-5 flex flex-col gap-2">
+      <span
+        className="font-mono text-[11px] font-semibold text-muted-foreground uppercase"
+        style={{ letterSpacing: "2px" }}
+      >
+        {label}
+      </span>
+      <span className="text-3xl font-semibold text-foreground">{value}</span>
+    </div>
+  );
+}
+
+function QuickAction({
+  href,
+  icon: Icon,
+  title,
+  description,
+}: {
+  href: string;
+  icon: typeof Users;
+  title: string;
+  description: string;
+}) {
+  return (
+    <Link
+      href={href}
+      className="flex-1 rounded-xl border border-border bg-card p-5 flex flex-col gap-3 transition-all hover:border-primary/40 hover:shadow-lg hover:shadow-primary/5 active:scale-[0.98]"
+    >
+      <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
+        <Icon className="h-5 w-5" />
+      </div>
+      <div>
+        <h3 className="font-semibold text-foreground">{title}</h3>
+        <p className="text-sm text-muted-foreground mt-0.5">{description}</p>
+      </div>
+    </Link>
+  );
+}
+
+function AgentPreview({ agent }: { agent: Agent }) {
+  return (
+    <Link
+      href={`/agents/${agent.id}`}
+      className="rounded-xl border border-border bg-card overflow-hidden transition-all hover:border-border-strong group"
+    >
+      <div
+        className="h-5"
+        style={{
+          background: `linear-gradient(180deg, ${agent.color}20 0%, transparent 100%)`,
+        }}
+      />
+      <div className="px-4 pb-3 flex flex-col gap-3">
+        <div className="flex items-center gap-3">
+          <div
+            className="h-10 w-10 rounded-full flex items-center justify-center shrink-0"
+            style={{ backgroundColor: agent.color }}
+          >
+            <Bot className="h-5 w-5 text-white" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="font-semibold text-foreground truncate">
+              {agent.name}
+            </p>
+            <p className="text-xs text-muted-foreground capitalize">
+              {agent.category}
+            </p>
+          </div>
+        </div>
+        <p className="text-[13px] leading-relaxed text-muted-foreground line-clamp-2">
+          {agent.description}
+        </p>
+        {agent.tags.length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {agent.tags.map((tag) => (
+              <span
+                key={tag}
+                className="text-xs px-2 py-1 rounded"
+                style={{
+                  backgroundColor: `${agent.color}15`,
+                  color: agent.color,
+                }}
+              >
+                {tag}
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+      <div className="flex items-center gap-2 px-4 py-3 border-t border-border justify-end">
+        <span className="text-[13px] font-medium text-muted-foreground flex items-center gap-1.5 cursor-pointer hover:text-foreground transition-colors">
+          <Zap className="h-3.5 w-3.5" />
+          View
+        </span>
+        <span className="text-[13px] font-medium text-primary-foreground bg-primary px-3 py-1 rounded-md flex items-center gap-1.5 cursor-pointer hover:bg-primary/90 transition-colors">
+          <Phone className="h-3.5 w-3.5" />
+          Chat
+        </span>
+      </div>
+    </Link>
+  );
+}
 
 export default function DashboardPage() {
   return (
-    <div className="container mx-auto px-4 py-6 lg:px-6 lg:py-8">
+    <div className="flex flex-col gap-8 px-6 md:px-12 py-8">
       {/* Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-8">
-        <div>
-          <h1 className="text-2xl font-semibold text-foreground">
-            Welcome back
-          </h1>
-          <p className="text-muted-foreground mt-1">
-            Build, deploy, and interact with AI agents
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-1">
+          <h1 className="text-2xl font-semibold text-foreground">Dashboard</h1>
+          <p className="text-sm text-muted-foreground">
+            Welcome back. Here&apos;s your agent overview.
           </p>
         </div>
-        <Button asChild className="gap-2">
-          <Link href="/agents">
-            <Plus className="h-4 w-4" />
-            Create Agent
-          </Link>
-        </Button>
+        <Link
+          href="/agents"
+          className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 shrink-0"
+        >
+          <Plus className="h-4 w-4" />
+          Create Agent
+        </Link>
+      </div>
+
+      {/* Stats Row */}
+      <div className="flex gap-4 flex-col sm:flex-row">
+        <StatCard label="Active Agents" value={4} />
+        <StatCard label="Total Chats" value={12} />
+        <StatCard label="Arena Sessions" value={3} />
       </div>
 
       {/* Quick Actions */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 mb-8">
-        <QuickActionCard
+      <div className="flex gap-4 flex-col sm:flex-row">
+        <QuickAction
           href="/arena"
           icon={Users}
-          title="Arena"
-          description="Multi-agent conversations"
+          title="Start Arena"
+          description="Launch multi-agent collaboration."
         />
-        <QuickActionCard
+        <QuickAction
           href="/live"
           icon={Phone}
           title="Live Chat"
-          description="Real-time voice conversation"
+          description="Run a 1:1 voice conversation."
         />
-        <QuickActionCard
+        <QuickAction
           href="/agents"
           icon={Bot}
           title="Browse Agents"
-          description="Manage your AI agents"
+          description="Explore and manage your AI agents."
         />
       </div>
 
-      {/* Content Grid */}
-      <div className="grid gap-6 lg:grid-cols-3">
-        {/* Recent Agents */}
-        <div className="lg:col-span-2">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-medium text-foreground">
-              Recent Agents
-            </h2>
-            <Link
-              href="/agents"
-              className="text-sm text-primary hover:underline"
-            >
-              View all
-            </Link>
-          </div>
-          <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-3 xl:grid-cols-4">
-            {recentAgents.map((agent) => (
-              <AgentPreviewCard key={agent.id} agent={agent} />
-            ))}
-            <Link
-              href="/agents"
-              className="flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border bg-card/50 p-4 text-muted-foreground transition-colors hover:border-primary/50 hover:text-primary"
-            >
-              <div className="flex h-12 w-12 items-center justify-center rounded-full border-2 border-dashed border-current">
-                <span className="text-2xl font-light">+</span>
-              </div>
-              <span className="text-sm">New Agent</span>
-            </Link>
-          </div>
+      {/* Recent Agents */}
+      <div className="flex flex-col gap-4">
+        <span
+          className="font-mono text-[11px] font-semibold text-muted-foreground uppercase"
+          style={{ letterSpacing: "2px" }}
+        >
+          Recent Agents
+        </span>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {recentAgents.map((agent) => (
+            <AgentPreview key={agent.id} agent={agent} />
+          ))}
         </div>
-
-        {/* Recent Activity */}
-        <div>
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-medium text-foreground">
-              Recent Activity
-            </h2>
-          </div>
-          <div className="flex flex-col gap-2">
-            {recentActivity.map((item, index) => (
-              <RecentActivityItem
-                key={index}
-                agentName={item.agentName}
-                mode={item.mode}
-                duration={item.duration}
-                timestamp={item.timestamp}
-              />
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* System Status */}
-      <div className="mt-8">
-        <SystemStatus />
       </div>
     </div>
   );
