@@ -526,4 +526,10 @@ export default defineAgent({
 
 // SIGINT and SIGTERM are handled by cli.runApp — it drains connections in production
 // and closes immediately in dev mode. Double Ctrl+C forces an immediate exit.
-cli.runApp(new ServerOptions({ agent: fileURLToPath(import.meta.url), agentName: 'siestai-agent' }));
+cli.runApp(new ServerOptions({
+  agent: fileURLToPath(import.meta.url),
+  agentName: 'siestai-agent',
+  numIdleProcesses: 2,
+  jobMemoryWarnMB: 400,
+  jobMemoryLimitMB: 600,
+}));
