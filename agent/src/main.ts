@@ -339,7 +339,15 @@ export default defineAgent({
         throw error;
       }
 
-      session.generateReply({ instructions: 'Greet the user and offer your assistance.' });
+      const participant = await ctx.waitForParticipant();
+      logger.info(
+        { identity: participant.identity },
+        'Participant joined — sending initial greeting',
+      );
+
+      session.generateReply({
+        userInput: '[System: Greet the user and offer your assistance.]',
+      });
       return;
     }
 
@@ -437,9 +445,17 @@ export default defineAgent({
         );
       }
     } else {
-      // Human collaboration mode: send greeting
+      // Human collaboration mode: wait for participant and send greeting
+      const participant = await ctx.waitForParticipant();
+      logger.info(
+        { identity: participant.identity },
+        'Arena participant joined — sending opening turn',
+      );
+
       const greeting = buildArenaGreeting(arenaMetadata);
-      session.generateReply({ instructions: greeting });
+      session.generateReply({
+        userInput: `[System: ${greeting} Keep it brief (1-2 sentences).]`,
+      });
     }
   },
 });
