@@ -7,6 +7,7 @@ const pool = new Pool({
 
 export const auth = betterAuth({
   database: pool,
+  baseURL: process.env.BETTER_AUTH_URL || 'http://localhost:4200',
   basePath: '/api/auth',
   trustedOrigins: [process.env.FRONTEND_URL || 'http://localhost:3000'],
   socialProviders: {
