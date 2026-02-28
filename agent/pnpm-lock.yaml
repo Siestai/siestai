@@ -9,14 +9,17 @@ importers:
   .:
     dependencies:
       '@livekit/agents':
-        specifier: ^1.0.47
-        version: 1.0.47(@livekit/rtc-node@0.13.24)(zod@4.3.6)
+        specifier: ^1.0.48
+        version: 1.0.48(@livekit/rtc-node@0.13.24)(zod@4.3.6)
       '@livekit/agents-plugin-livekit':
-        specifier: ^1.0.47
-        version: 1.0.47(@livekit/agents@1.0.47(@livekit/rtc-node@0.13.24)(zod@4.3.6))
+        specifier: ^1.0.48
+        version: 1.0.48(@livekit/agents@1.0.48(@livekit/rtc-node@0.13.24)(zod@4.3.6))
+      '@livekit/agents-plugin-openai':
+        specifier: ^1.0.48
+        version: 1.0.48(@livekit/agents@1.0.48(@livekit/rtc-node@0.13.24)(zod@4.3.6))(@livekit/rtc-node@0.13.24)(zod@4.3.6)
       '@livekit/agents-plugin-silero':
-        specifier: ^1.0.47
-        version: 1.0.47(@livekit/agents@1.0.47(@livekit/rtc-node@0.13.24)(zod@4.3.6))(@livekit/rtc-node@0.13.24)
+        specifier: ^1.0.48
+        version: 1.0.48(@livekit/agents@1.0.48(@livekit/rtc-node@0.13.24)(zod@4.3.6))(@livekit/rtc-node@0.13.24)
       '@livekit/noise-cancellation-node':
         specifier: ^0.1.9
         version: 0.1.9
@@ -406,19 +409,25 @@ packages:
   '@jridgewell/sourcemap-codec@1.5.5':
     resolution: {integrity: sha512-cYQ9310grqxueWbl+WuIUIaiUaDcj7WOq5fVhEljNVgRfOUhY9fy2zTvfoqWsnebh8Sl70VScFbICvJnLKB0Og==}
 
-  '@livekit/agents-plugin-livekit@1.0.47':
-    resolution: {integrity: sha512-ZDSoF8Y2fhzwPCtWsQZ8kC1hnY+0tA2FenLrlTHrj0IbyUsjV9x/LG7i6gGjFboLHV1cTKaVTU3yoLLWq7UbqA==}
+  '@livekit/agents-plugin-livekit@1.0.48':
+    resolution: {integrity: sha512-VQV/wpK5EMprR6ffEoJPmeTVwgTjBAxPir5XgwFgFhhM8DKfLbV6eJg6dp+1BL4EdXKScAnR4QRCiXp2Hb/J6Q==}
     peerDependencies:
-      '@livekit/agents': 1.0.47
+      '@livekit/agents': 1.0.48
 
-  '@livekit/agents-plugin-silero@1.0.47':
-    resolution: {integrity: sha512-u4kpFNX1q7su+myU0A6T1GrVEl9oQnXoKL1eGs+l3teS+F+psTi6feX4onnT3cpHOieY0CwzaPlNkV3T4UBvCA==}
+  '@livekit/agents-plugin-openai@1.0.48':
+    resolution: {integrity: sha512-+0Sb5YybNfxmszvzZOkQwEqFMRDbuZmKYnI0LAU4wkFWuYbk8NpG39sxIzestst28qUzsNpQtmwulax2p/wO4g==}
     peerDependencies:
-      '@livekit/agents': 1.0.47
+      '@livekit/agents': 1.0.48
       '@livekit/rtc-node': ^0.13.24
 
-  '@livekit/agents@1.0.47':
-    resolution: {integrity: sha512-Iy995PAdObU2niimqYNvJxLGAvrTktrJAMd+vFOmMRmB1IRafcwEBIcSBM1N5csT7Snu6mwS9/3SmjkHgysXyg==}
+  '@livekit/agents-plugin-silero@1.0.48':
+    resolution: {integrity: sha512-YdWS/BBT4kn2D/ljX3CBq+4Cc3uhqB2/ZoU/0Y/H9ycYyRd6tNJXJJi6KaC2O+hXpbIzJ/MYxNgIuMmgKKJhSw==}
+    peerDependencies:
+      '@livekit/agents': 1.0.48
+      '@livekit/rtc-node': ^0.13.24
+
+  '@livekit/agents@1.0.48':
+    resolution: {integrity: sha512-mfTppBj1GAFZfLLaQdACqmKevViydfgo4O7+CuxsGrxKDz+yq9HlgITFK8F4TTLeXkkyzYbTnx6jFjZD9BL+BA==}
     peerDependencies:
       '@livekit/rtc-node': ^0.13.24
       zod: ^3.25.76 || ^4.1.8
@@ -1834,16 +1843,28 @@ snapshots:
 
   '@jridgewell/sourcemap-codec@1.5.5': {}
 
-  '@livekit/agents-plugin-livekit@1.0.47(@livekit/agents@1.0.47(@livekit/rtc-node@0.13.24)(zod@4.3.6))':
+  '@livekit/agents-plugin-livekit@1.0.48(@livekit/agents@1.0.48(@livekit/rtc-node@0.13.24)(zod@4.3.6))':
     dependencies:
       '@huggingface/hub': 2.4.1
       '@huggingface/transformers': 3.7.2
-      '@livekit/agents': 1.0.47(@livekit/rtc-node@0.13.24)(zod@4.3.6)
+      '@livekit/agents': 1.0.48(@livekit/rtc-node@0.13.24)(zod@4.3.6)
       onnxruntime-node: 1.21.0
 
-  '@livekit/agents-plugin-silero@1.0.47(@livekit/agents@1.0.47(@livekit/rtc-node@0.13.24)(zod@4.3.6))(@livekit/rtc-node@0.13.24)':
+  '@livekit/agents-plugin-openai@1.0.48(@livekit/agents@1.0.48(@livekit/rtc-node@0.13.24)(zod@4.3.6))(@livekit/rtc-node@0.13.24)(zod@4.3.6)':
     dependencies:
-      '@livekit/agents': 1.0.47(@livekit/rtc-node@0.13.24)(zod@4.3.6)
+      '@livekit/agents': 1.0.48(@livekit/rtc-node@0.13.24)(zod@4.3.6)
+      '@livekit/mutex': 1.1.1
+      '@livekit/rtc-node': 0.13.24
+      openai: 6.25.0(ws@8.19.0)(zod@4.3.6)
+      ws: 8.19.0
+    transitivePeerDependencies:
+      - bufferutil
+      - utf-8-validate
+      - zod
+
+  '@livekit/agents-plugin-silero@1.0.48(@livekit/agents@1.0.48(@livekit/rtc-node@0.13.24)(zod@4.3.6))(@livekit/rtc-node@0.13.24)':
+    dependencies:
+      '@livekit/agents': 1.0.48(@livekit/rtc-node@0.13.24)(zod@4.3.6)
       '@livekit/rtc-node': 0.13.24
       onnxruntime-node: 1.21.0
       ws: 8.19.0
@@ -1851,7 +1872,7 @@ snapshots:
       - bufferutil
       - utf-8-validate
 
-  '@livekit/agents@1.0.47(@livekit/rtc-node@0.13.24)(zod@4.3.6)':
+  '@livekit/agents@1.0.48(@livekit/rtc-node@0.13.24)(zod@4.3.6)':
     dependencies:
       '@ffmpeg-installer/ffmpeg': 1.1.0
       '@livekit/mutex': 1.1.1
