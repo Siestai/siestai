@@ -3,8 +3,12 @@
 screenshots/
 designs/
 .DS_Store
+node_modules/
 
 # Environment files
 .env
 .env.local
 *.env.local
+
+# Mastra build output
+.mastra/

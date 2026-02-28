@@ -13,15 +13,18 @@ import {
   MessageCircle,
   RotateCcw,
   Clock,
+  Plus,
+  Trash2,
 } from "lucide-react";
 import "@livekit/components-styles";
 import { LiveKitRoom } from "@livekit/components-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { ROOM_OPTIONS } from "@/lib/livekit";
-import type { ParticipationMode } from "@/lib/types";
+import type { Agent, ParticipationMode } from "@/lib/types";
 import {
   ArenaSessionProvider,
   useArenaSession,
@@ -29,6 +32,7 @@ import {
 import { InviteLinkPanel } from "@/components/arena/invite-link-panel";
 import { ExternalParticipantTile } from "@/components/arena/external-participant-tile";
 import { ArenaRoom } from "@/components/arena/arena-room";
+import { AgentPicker } from "@/components/arena/agent-picker";
 
 type PageState = "setup" | "waiting" | "live" | "ended";
 
@@ -45,6 +49,13 @@ function ArenaPageContent() {
     useState<ParticipationMode>("human_collab");
   const [topic, setTopic] = useState("");
   const [configMode, setConfigMode] = useState<"manual" | "agents">("agents");
+  const [selectedAgents, setSelectedAgents] = useState<Agent[]>([]);
+  const [manualAgents, setManualAgents] = useState<
+    { name: string; instructions: string }[]
+  >([
+    { name: "", instructions: "" },
+    { name: "", instructions: "" },
+  ]);
   const [isCreating, setIsCreating] = useState(false);
   const sessionStartedAt = useRef<number>(0);
 
@@ -53,8 +64,16 @@ function ArenaPageContent() {
   const agentOnlyNeedsTopic =
     participationMode === "agent_only" && !topic.trim();
 
+  const validManualAgents = manualAgents.filter(
+    (a) => a.name.trim() && a.instructions.trim(),
+  );
+
   const canProceedFromStep = (s: number) => {
-    if (s === 1) return true;
+    if (s === 1) {
+      return configMode === "agents"
+        ? selectedAgents.length >= 2
+        : validManualAgents.length >= 2;
+    }
     if (s === 2) return true;
     if (s === 3) return !agentOnlyNeedsTopic;
     return false;
@@ -70,10 +89,23 @@ function ArenaPageContent() {
   const handleStartConversation = async () => {
     setIsCreating(true);
     try {
+      const nativeAgents =
+        configMode === "agents"
+          ? selectedAgents.map((a) => ({
+              name: a.name,
+              agentId: a.id,
+              instructions: a.instructions,
+            }))
+          : validManualAgents.map((a) => ({
+              name: a.name.trim(),
+              instructions: a.instructions.trim(),
+            }));
+
       await arenaSession.createSession({
         topic: topic.trim(),
         mode: "group",
         participationMode,
+        nativeAgents,
       });
       arenaSession.startListening();
       sessionStartedAt.current = Date.now();
@@ -106,6 +138,11 @@ function ArenaPageContent() {
     setTopic("");
     setParticipationMode("human_collab");
     setConfigMode("agents");
+    setSelectedAgents([]);
+    setManualAgents([
+      { name: "", instructions: "" },
+      { name: "", instructions: "" },
+    ]);
   };
 
   const externalParticipants = arenaSession.participants.filter(
@@ -219,22 +256,105 @@ function ArenaPageContent() {
                 </p>
               </div>
 
-              <div className="rounded-lg border border-dashed border-border bg-card/30 p-6">
-                <div className="flex flex-col items-center justify-center py-6">
-                  <div className="flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 mb-4">
-                    <Bot className="h-7 w-7 text-primary" />
+              <div className="rounded-lg border border-border bg-card/30 p-6">
+                {configMode === "agents" ? (
+                  <AgentPicker
+                    selectedAgents={selectedAgents}
+                    onSelectionChange={setSelectedAgents}
+                    maxAgents={4}
+                  />
+                ) : (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs text-muted-foreground">
+                        Define 2–4 agents with name and instructions
+                      </p>
+                      <span
+                        className={cn(
+                          "text-xs font-medium px-2 py-0.5 rounded-full",
+                          validManualAgents.length >= 2
+                            ? "bg-primary/15 text-primary"
+                            : "bg-secondary text-muted-foreground",
+                        )}
+                      >
+                        {validManualAgents.length}/4 ready
+                      </span>
+                    </div>
+
+                    {manualAgents.map((agent, i) => (
+                      <div
+                        key={i}
+                        className="rounded-lg border border-border bg-card p-3 space-y-2"
+                      >
+                        <div className="flex items-center justify-between">
+                          <Label className="text-xs font-medium">
+                            Agent {i + 1}
+                          </Label>
+                          {manualAgents.length > 2 && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setManualAgents((prev) =>
+                                  prev.filter((_, idx) => idx !== i),
+                                )
+                              }
+                              className="text-muted-foreground hover:text-destructive transition-colors"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          )}
+                        </div>
+                        <Input
+                          placeholder="Agent name"
+                          value={agent.name}
+                          onChange={(e) =>
+                            setManualAgents((prev) =>
+                              prev.map((a, idx) =>
+                                idx === i
+                                  ? { ...a, name: e.target.value }
+                                  : a,
+                              ),
+                            )
+                          }
+                          className="bg-secondary border-border text-sm"
+                        />
+                        <Textarea
+                          placeholder="Instructions / system prompt"
+                          value={agent.instructions}
+                          onChange={(e) =>
+                            setManualAgents((prev) =>
+                              prev.map((a, idx) =>
+                                idx === i
+                                  ? { ...a, instructions: e.target.value }
+                                  : a,
+                              ),
+                            )
+                          }
+                          rows={2}
+                          className="bg-secondary border-border text-sm resize-none"
+                        />
+                      </div>
+                    ))}
+
+                    {manualAgents.length < 4 && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="gap-1.5 text-muted-foreground"
+                        onClick={() =>
+                          setManualAgents((prev) => [
+                            ...prev,
+                            { name: "", instructions: "" },
+                          ])
+                        }
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                        Add Agent
+                      </Button>
+                    )}
                   </div>
-                  <p className="text-sm font-medium text-foreground mb-1">
-                    {configMode === "agents"
-                      ? "Select at least 2 agents"
-                      : "Add your agents"}
-                  </p>
-                  <p className="text-xs text-muted-foreground text-center max-w-sm">
-                    {configMode === "agents"
-                      ? "Pick agents from your library to participate in the group discussion."
-                      : "Define each agent's name and instructions. Add 2–4 agents for the best results."}
-                  </p>
-                </div>
+                )}
               </div>
             </div>
           )}
@@ -368,10 +488,14 @@ function ArenaPageContent() {
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Agents</span>
-                    <span className="text-foreground">
+                    <span className="text-foreground truncate max-w-[250px]">
                       {configMode === "agents"
-                        ? "From library (none selected)"
-                        : "Manual configuration"}
+                        ? selectedAgents.length > 0
+                          ? `${selectedAgents.map((a) => a.name).join(", ")} (${selectedAgents.length})`
+                          : "None selected"
+                        : validManualAgents.length > 0
+                          ? `${validManualAgents.map((a) => a.name.trim()).join(", ")} (${validManualAgents.length})`
+                          : "None configured"}
                     </span>
                   </div>
                   <div className="flex justify-between">

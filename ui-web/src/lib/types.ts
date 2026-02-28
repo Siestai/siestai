@@ -3,6 +3,8 @@
  */
 
 // Agent types
+export type AgentSource = "mastra" | "livekit" | "external";
+
 export interface Agent {
   id: string;
   name: string;
@@ -12,31 +14,26 @@ export interface Agent {
   color: string;
   icon: string;
   category: string;
-  voice_id: string | null;
-  preset_voice: string | null;
-  stt_provider: string | null;
-  llm_provider: string | null;
-  tts_provider: string | null;
-  tts_engine: string | null;
-  tts_cloud_provider: string | null;
-  llm_model: string | null;
-  is_online: boolean;
-  voice_name: string | null;
-  call_count: number;
-  created_at: string;
-  updated_at: string;
+  source: AgentSource;
+  llmModel: string | null;
+  isOnline: boolean;
+  createdAt: string;
+  updatedAt: string;
 }
 
-export interface AgentResponse {
-  success: boolean;
-  agent: Agent;
-}
+export type CreateAgentData = {
+  name: string;
+  instructions: string;
+  description?: string;
+  category?: string;
+  source?: AgentSource;
+  tags?: string[];
+  color?: string;
+  icon?: string;
+  llmModel?: string;
+};
 
-export interface AgentListResponse {
-  success: boolean;
-  agents: Agent[];
-  total: number;
-}
+export type UpdateAgentData = Partial<CreateAgentData>;
 
 // Arena types
 export interface ArenaAgentConfig {

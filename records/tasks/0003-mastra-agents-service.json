@@ -5,179 +5,194 @@
     {
       "id": 1,
       "phase": 1,
-      "description": "Initialize Mastra service in the monorepo with pnpm create mastra, restructure for monorepo layout.",
+      "description": "Scaffold Mastra service directory with manual setup (no create-mastra).",
       "steps": [
-        "Run `pnpm create mastra@latest` in a temp directory to scaffold, then move relevant files into `mastra/` in the monorepo root",
-        "Ensure `mastra/package.json` has correct dependencies: `@mastra/core`, `@mastra/drizzle`, `drizzle-orm`, `drizzle-kit`, `pg`",
-        "Add `mastra/tsconfig.json` extending the project conventions",
-        "Add `mastra/.env.example` with `DATABASE_URL=postgresql://...` and `OPENAI_API_KEY`",
-        "Verify `pnpm install` works from the monorepo root"
+        "Create `mastra/` directory in monorepo root",
+        "Create `mastra/package.json` with: name `@siestai/mastra`, scripts (`dev`: `mastra dev`, `build`: `mastra build`), dependencies: `@mastra/core@latest`, `@mastra/pg@latest`, `drizzle-orm`, `pg`, `zod@^4`. devDependencies: `typescript`, `@types/node`, `mastra@latest`, `drizzle-kit`, `tsx`",
+        "Create `mastra/tsconfig.json`: target ES2022, module ES2022, moduleResolution bundler, strict true, skipLibCheck true, noEmit true, include [\"src/**/*\"]",
+        "Create `mastra/.env.example` with `DATABASE_URL=postgresql://postgres:postgres@localhost:5432/siestai` and `OPENAI_API_KEY=sk-...`",
+        "Run `cd mastra && pnpm install` to verify deps resolve"
       ],
-      "files": ["mastra/"],
+      "files": ["mastra/package.json", "mastra/tsconfig.json", "mastra/.env.example"],
       "verify": "cd mastra && pnpm install && pnpm exec tsc --noEmit 2>&1 | head -20",
-      "done": false
+      "done": true
     },
     {
       "id": 2,
       "phase": 1,
-      "description": "Create Drizzle schema for agents table with core fields and AgentSource enum.",
+      "description": "Create Drizzle schema for custom agents table with AgentSource pgEnum.",
       "steps": [
-        "Create `mastra/src/db/schema.ts` with a `agents` table using Drizzle's `pgTable`",
-        "Add `agent_source` pgEnum with values: 'mastra', 'livekit', 'external'",
-        "Core columns: `id` (uuid pk), `name` (varchar 100, not null), `description` (text), `instructions` (text, not null), `category` (varchar 50), `tags` (jsonb, default []), `color` (varchar 7), `icon` (varchar 50), `source` (agent_source enum, default 'mastra'), `llm_model` (varchar), `is_online` (boolean, default true), `created_at` (timestamp, default now), `updated_at` (timestamp, default now)",
-        "Create `mastra/src/db/index.ts` — Drizzle client init with `DATABASE_URL`",
-        "Create `mastra/drizzle.config.ts` for migrations",
-        "Generate initial migration with `pnpm drizzle-kit generate`"
+        "Create `mastra/src/db/schema.ts` — define `agentSourceEnum` as `pgEnum('agent_source', ['mastra', 'livekit', 'external'])`",
+        "Define `agents` table with `pgTable`: `id` (uuid pk, default gen_random_uuid()), `name` (varchar(100), not null), `description` (text, default ''), `instructions` (text, not null), `category` (varchar(50), default 'conversational'), `tags` (jsonb, default '[]'), `color` (varchar(7), default '#3b82f6'), `icon` (varchar(50), default 'bot'), `source` (agentSourceEnum, default 'mastra'), `llm_model` (varchar(100)), `is_online` (boolean, default true), `created_at` (timestamp, default now()), `updated_at` (timestamp, default now())",
+        "Create `mastra/src/db/index.ts` — init Drizzle client: `import { drizzle } from 'drizzle-orm/node-postgres'`, create with `process.env.DATABASE_URL`, export `db` and re-export schema",
+        "Create `mastra/drizzle.config.ts` — schema path `./src/db/schema.ts`, driver `pg`, dbCredentials from DATABASE_URL, out `./drizzle`",
+        "Add `generate` and `migrate` scripts to package.json: `drizzle-kit generate` and `drizzle-kit migrate`"
       ],
       "files": ["mastra/src/db/schema.ts", "mastra/src/db/index.ts", "mastra/drizzle.config.ts"],
-      "verify": "cd mastra && npx tsc --noEmit --pretty 2>&1 | head -20",
-      "done": false
+      "verify": "cd mastra && pnpm exec tsc --noEmit --pretty 2>&1 | head -20",
+      "done": true
     },
     {
       "id": 3,
       "phase": 1,
-      "description": "Create agent CRUD service and REST routes in the Mastra service.",
+      "description": "Create agent CRUD functions using Drizzle queries.",
       "steps": [
-        "Create `mastra/src/agents/agent-crud.ts` — functions: `listAgents(params?)`, `getAgent(id)`, `createAgent(data)`, `updateAgent(id, data)`, `deleteAgent(id)`",
-        "Use Drizzle queries against the agents table",
-        "Support filtering by `category` and `search` (ILIKE on name/description)",
-        "Create `mastra/src/routes/agents.ts` — Express/Hono routes: GET /api/agents, GET /api/agents/:id, POST /api/agents, PUT /api/agents/:id, DELETE /api/agents/:id",
-        "Wire routes into the Mastra server entry point"
+        "Create `mastra/src/agents/agent-crud.ts`",
+        "Implement `listAgents(params?: { category?: string; search?: string })` — select from agents table, filter by category with `eq()`, filter by search with `or(ilike(name), ilike(description))`",
+        "Implement `getAgent(id: string)` — select where id equals, throw if not found",
+        "Implement `createAgent(data)` — insert into agents, return inserted row. Validate: name required, instructions required",
+        "Implement `updateAgent(id: string, data: Partial)` — update agents set fields where id, set updated_at to now(), return updated row",
+        "Implement `deleteAgent(id: string)` — delete from agents where id"
       ],
-      "files": ["mastra/src/agents/agent-crud.ts", "mastra/src/routes/agents.ts"],
-      "verify": "cd mastra && npx tsc --noEmit --pretty 2>&1 | head -20",
-      "done": false
+      "files": ["mastra/src/agents/agent-crud.ts"],
+      "verify": "cd mastra && pnpm exec tsc --noEmit --pretty 2>&1 | head -20",
+      "done": true
     },
     {
       "id": 4,
       "phase": 1,
-      "description": "Register Mastra Agent runtime instances and add a streaming endpoint.",
+      "description": "Create Mastra entry point with registered agents and custom CRUD API routes.",
       "steps": [
-        "Create `mastra/src/agents/runtime.ts` — function to instantiate Mastra `Agent` from a DB record (name, instructions, model → Agent class)",
-        "Register a default agent in the Mastra instance",
-        "Add POST /api/agents/:id/stream endpoint — loads agent config from DB, creates Mastra Agent instance, calls `agent.stream()`, returns SSE/streaming response",
-        "Handle streaming format compatible with Vercel AI SDK (text stream)",
-        "Wire into the Mastra server"
+        "Create `mastra/src/mastra/agents/default-agent.ts` — export a default `Agent` with id 'default-agent', basic instructions, model 'openai/gpt-4.1-mini'",
+        "Create `mastra/src/mastra/index.ts` — import `Mastra` from '@mastra/core', import `registerApiRoute` from '@mastra/core/server', import `PostgresStore` from '@mastra/pg'",
+        "Configure Mastra instance: `storage: new PostgresStore({ id: 'siestai-storage', connectionString: process.env.DATABASE_URL })`, register default agent in `agents` map",
+        "Add custom API routes via `server.apiRoutes` using `registerApiRoute()`: GET /custom/agents (listAgents), GET /custom/agents/:id (getAgent), POST /custom/agents (createAgent), PUT /custom/agents/:id (updateAgent), DELETE /custom/agents/:id (deleteAgent)",
+        "Each route handler: get request body/params from Hono context `c`, call the CRUD function, return `c.json(result)`",
+        "Export the `mastra` instance as default export"
       ],
-      "files": ["mastra/src/agents/runtime.ts", "mastra/src/routes/agents.ts"],
-      "verify": "cd mastra && npx tsc --noEmit --pretty 2>&1 | head -20",
-      "done": false
+      "files": ["mastra/src/mastra/index.ts", "mastra/src/mastra/agents/default-agent.ts"],
+      "verify": "cd mastra && pnpm exec tsc --noEmit --pretty 2>&1 | head -20",
+      "done": true
     },
     {
       "id": 5,
+      "phase": 1,
+      "description": "Add dynamic agent streaming — load agent config from DB and stream via Mastra Agent.",
+      "steps": [
+        "Create `mastra/src/agents/runtime.ts` — function `createRuntimeAgent(dbRecord)`: takes an agent DB row, returns `new Agent({ id: record.id, name: record.name, instructions: record.instructions, model: record.llm_model || 'openai/gpt-4.1-mini' })`",
+        "Add custom route POST /custom/agents/:id/stream via `registerApiRoute()` in the Mastra config",
+        "Route handler: read agent from DB with `getAgent(id)`, call `createRuntimeAgent(agent)`, get messages from request body, call `agent.stream(messages)`, use `toAISDKStream()` or pipe textStream to response",
+        "The response should be SSE-compatible for the Vercel AI SDK on the frontend"
+      ],
+      "files": ["mastra/src/agents/runtime.ts", "mastra/src/mastra/index.ts"],
+      "verify": "cd mastra && pnpm exec tsc --noEmit --pretty 2>&1 | head -20",
+      "done": true
+    },
+    {
+      "id": 6,
       "phase": 2,
       "description": "Add agents module to NestJS backend that proxies CRUD and streaming to the Mastra service.",
       "steps": [
-        "Create `backend/src/agents/agents.module.ts`",
-        "Create `backend/src/agents/agents.service.ts` — HttpService calls to Mastra service at `MASTRA_URL` (default http://localhost:4111)",
-        "Create `backend/src/agents/agents.controller.ts` — REST endpoints: GET /agents, GET /agents/:id, POST /agents, PUT /agents/:id, DELETE /agents/:id, POST /agents/:id/stream (passthrough)",
-        "Create DTOs with validation: `create-agent.dto.ts` (name required, instructions required, source enum), `update-agent.dto.ts`",
-        "Import `AgentsModule` + `HttpModule` in `app.module.ts`",
-        "Add `MASTRA_URL` to `backend/.env.example`"
+        "Install `@nestjs/axios` and `axios` in backend: `cd backend && pnpm add @nestjs/axios axios`",
+        "Create `backend/src/agents/agents.module.ts` — import HttpModule.register({ baseURL: process.env.MASTRA_URL || 'http://localhost:4111' })",
+        "Create `backend/src/agents/agents.service.ts` — inject HttpService, implement: listAgents(params?), getAgent(id), createAgent(data), updateAgent(id, data), deleteAgent(id) — each calls Mastra's /custom/agents endpoints",
+        "Add `streamAgent(id, messages)` method — makes POST to Mastra `/custom/agents/:id/stream`, returns the response stream",
+        "Create `backend/src/agents/agents.controller.ts` — REST endpoints: GET /agents, GET /agents/:id, POST /agents, PUT /agents/:id, DELETE /agents/:id, POST /agents/:id/stream (passthrough SSE)",
+        "Create `backend/src/agents/dto/create-agent.dto.ts` — name (required, max 100), instructions (required), description (optional), category (optional), source (optional, IsIn ['mastra','livekit','external']), tags (optional array), color (optional), icon (optional), llm_model (optional)",
+        "Create `backend/src/agents/dto/update-agent.dto.ts` — PartialType of CreateAgentDto",
+        "Import `AgentsModule` in `app.module.ts`",
+        "Add `MASTRA_URL=http://localhost:4111` to `backend/.env.example`"
       ],
       "files": [
         "backend/src/agents/agents.module.ts",
         "backend/src/agents/agents.service.ts",
         "backend/src/agents/agents.controller.ts",
-        "backend/src/agents/dto/"
+        "backend/src/agents/dto/create-agent.dto.ts",
+        "backend/src/agents/dto/update-agent.dto.ts",
+        "backend/src/app.module.ts"
       ],
-      "verify": "cd backend && npx tsc --noEmit --pretty 2>&1 | head -20",
-      "done": false
-    },
-    {
-      "id": 6,
-      "phase": 3,
-      "description": "Replace mock API client with real backend calls for agent CRUD.",
-      "steps": [
-        "Rewrite `ui-web/src/lib/api.ts` — remove all MOCK_AGENTS, replace with real fetch calls to backend `/agents` endpoints",
-        "Keep same method signatures: `listAgents`, `getAgent`, `getAgentName`",
-        "Add `createAgent(data)`, `updateAgent(id, data)`, `deleteAgent(id)` methods",
-        "Update `Agent` interface in `types.ts`: remove voice fields, add `source` field with AgentSource type",
-        "Ensure error handling matches existing patterns"
-      ],
-      "files": ["ui-web/src/lib/api.ts", "ui-web/src/lib/types.ts"],
-      "verify": "cd ui-web && npx tsc --noEmit --pretty 2>&1 | head -20",
-      "done": false
+      "verify": "cd backend && pnpm exec tsc --noEmit --pretty 2>&1 | head -20",
+      "done": true
     },
     {
       "id": 7,
       "phase": 3,
-      "description": "Add Create/Edit Agent dialog to the Agents page.",
+      "description": "Update frontend types and API client — remove mock data, add real backend calls.",
       "steps": [
-        "Create `ui-web/src/components/agents/agent-form-dialog.tsx` — modal form for creating/editing agents",
-        "Fields: name, description, instructions (textarea), category (select from AGENT_CATEGORIES), color (preset color picker from AGENT_CARD_COLORS), icon, source (select: mastra/livekit/external), LLM model",
-        "Reuse existing shadcn Dialog, Input, Select, Textarea components",
-        "Wire 'Create Agent' button on agents page to open the dialog",
-        "On submit: call `api.createAgent()` or `api.updateAgent()`, refresh the agent list",
-        "Add edit button to `AgentCard` that opens the dialog in edit mode"
+        "Update `ui-web/src/lib/types.ts`: add `AgentSource` type ('mastra' | 'livekit' | 'external'), remove voice fields from Agent interface (voice_id, preset_voice, stt_provider, llm_provider, tts_provider, tts_engine, tts_cloud_provider, voice_name, call_count), add `source: AgentSource` field",
+        "Rewrite `ui-web/src/lib/api.ts`: remove all MOCK_AGENTS and MOCK_SESSIONS arrays, replace listAgents with real fetch to `${API_BASE_URL}/agents` with query params, replace getAgent with real fetch to `${API_BASE_URL}/agents/:id`",
+        "Add methods: `createAgent(data)` → POST /agents, `updateAgent(id, data)` → PUT /agents/:id, `deleteAgent(id)` → DELETE /agents/:id",
+        "Keep `getAgentName` as an async function that calls getAgent and returns name",
+        "Update `ui-web/src/components/agents/agent-card.tsx`: remove references to `call_count` and `voice_name`, remove Phone icon import if only used for call_count. Add source badge if source !== 'mastra'",
+        "Fix any resulting TypeScript errors in agents page and other consumers of the Agent type"
       ],
-      "files": ["ui-web/src/components/agents/agent-form-dialog.tsx", "ui-web/src/app/agents/page.tsx"],
-      "verify": "cd ui-web && npx tsc --noEmit --pretty 2>&1 | head -20",
-      "done": false
+      "files": ["ui-web/src/lib/types.ts", "ui-web/src/lib/api.ts", "ui-web/src/components/agents/agent-card.tsx"],
+      "verify": "cd ui-web && pnpm exec tsc --noEmit --pretty 2>&1 | head -20",
+      "done": true
     },
     {
       "id": 8,
       "phase": 3,
-      "description": "Add delete agent functionality with confirmation.",
+      "description": "Add Create/Edit Agent dialog and delete functionality to the Agents page.",
       "steps": [
-        "Add delete button to agent detail page (`ui-web/src/app/agents/[id]/page.tsx`)",
-        "Show confirmation dialog before deleting",
-        "Call `api.deleteAgent(id)`, redirect to agents list on success",
-        "Optionally add delete to the agent card dropdown menu"
+        "Create `ui-web/src/components/agents/agent-form-dialog.tsx` — modal form for creating/editing agents",
+        "Fields: name (Input), description (Input), instructions (Textarea), category (Select from AGENT_CATEGORIES), color (preset color picker from AGENT_CARD_COLORS), icon (Input), source (Select: mastra/livekit/external), llm_model (Input)",
+        "Reuse existing shadcn Dialog, Input, Select, Textarea, Label, Button components",
+        "Props: `open`, `onOpenChange`, `agent?: Agent` (for edit mode), `onSaved: () => void`",
+        "On submit: call `api.createAgent()` or `api.updateAgent()` depending on mode, then call `onSaved()`",
+        "In `ui-web/src/app/agents/page.tsx`: wire 'Create Agent' button to open the dialog, add state for dialog open/edit agent",
+        "Add edit button and delete button to `AgentCard` with confirmation dialog for delete",
+        "Delete calls `api.deleteAgent(id)` then refreshes the list"
       ],
-      "files": ["ui-web/src/app/agents/[id]/page.tsx"],
-      "verify": "cd ui-web && npx tsc --noEmit --pretty 2>&1 | head -20",
-      "done": false
+      "files": [
+        "ui-web/src/components/agents/agent-form-dialog.tsx",
+        "ui-web/src/components/agents/delete-agent-dialog.tsx",
+        "ui-web/src/app/agents/page.tsx",
+        "ui-web/src/components/agents/agent-card.tsx"
+      ],
+      "verify": "cd ui-web && pnpm exec tsc --noEmit --pretty 2>&1 | head -20",
+      "done": true
     },
     {
       "id": 9,
       "phase": 4,
-      "description": "Create AgentPicker component (modeled after voice project) and wire into arena setup Step 1.",
+      "description": "Create AgentPicker component and wire into arena setup Step 1.",
       "steps": [
-        "Create `ui-web/src/components/arena/agent-picker.tsx` — based on voice project's AgentPicker",
-        "Fetch agents from `api.listAgents()` on mount",
-        "Toggle-select UI: checkbox + agent info (name, color, description, category), max 4 agents",
-        "Show selected count indicator",
-        "In `ui-web/src/app/arena/page.tsx` Step 1: replace empty placeholder with AgentPicker for 'agents' config mode",
-        "For 'manual' config mode: add simple inline form for name + instructions (no voice for now)",
-        "Track selection in state as `selectedAgents: Agent[]`",
-        "In `handleStartConversation`: pass selected agents as `nativeAgents` array with `name` and `instructions` to `createSession()`",
-        "Require at least 2 agents selected to proceed"
+        "Create `ui-web/src/components/arena/agent-picker.tsx` — fetches agents from `api.listAgents()` on mount",
+        "Toggle-select UI: each agent card shows name, color dot, description, category. Clicking toggles selection. Max 4 agents. Show selected count badge.",
+        "Props: `selectedAgents: Agent[]`, `onSelectionChange: (agents: Agent[]) => void`, `maxAgents?: number` (default 4)",
+        "In `ui-web/src/app/arena/page.tsx`: add state `selectedAgents: Agent[]`, render AgentPicker in Step 1 when configMode === 'agents' (replace the placeholder dashed-border div)",
+        "For configMode === 'manual': add simple inline form to define 2-4 agents with name + instructions fields (no voice). Store as `manualAgents: { name: string; instructions: string }[]`",
+        "Update `canProceedFromStep(1)` to require at least 2 agents: `configMode === 'agents' ? selectedAgents.length >= 2 : manualAgents.filter(a => a.name && a.instructions).length >= 2`",
+        "In `handleStartConversation`: build `nativeAgents` array from selectedAgents (map to `{ name, agentId: id, instructions }`) or manualAgents, pass to `createSession({ ..., nativeAgents })`",
+        "Update the Summary section in Step 3 to show selected agent names and count"
       ],
       "files": ["ui-web/src/components/arena/agent-picker.tsx", "ui-web/src/app/arena/page.tsx"],
-      "verify": "cd ui-web && npx tsc --noEmit --pretty 2>&1 | head -20",
-      "done": false
+      "verify": "cd ui-web && pnpm exec tsc --noEmit --pretty 2>&1 | head -20",
+      "done": true
     },
     {
       "id": 10,
       "phase": 5,
-      "description": "Create seed script with default test agents.",
+      "description": "Add PostgreSQL to docker-compose for dev and staging.",
       "steps": [
-        "Create `mastra/src/scripts/seed.ts`",
-        "Insert 4 agents: Atlas (technical, source:mastra), Nova (creative, source:mastra), Sage (conversational, source:mastra), Debate Bot (debate, source:mastra)",
-        "Each agent has meaningful instructions, category, color, icon, llm_model",
-        "Add `seed` script to `mastra/package.json`: `tsx src/scripts/seed.ts`",
-        "Ensure idempotent — skip if agents with same names exist"
+        "Create `docker-compose.dev.yml` — postgres service: image postgres:16-alpine, port 5432:5432, volume pgdata, env POSTGRES_DB=siestai, POSTGRES_USER=postgres, POSTGRES_PASSWORD=postgres",
+        "Add `postgres` service to `docker-compose.staging.yml` (create if not exists): image postgres:16-alpine, volume, POSTGRES_DB/USER/PASSWORD env vars",
+        "Create `mastra/Dockerfile` — FROM node:20-alpine, WORKDIR /app, COPY package.json pnpm-lock.yaml, RUN npm i -g pnpm && pnpm install --frozen-lockfile, COPY . ., RUN pnpm build, CMD [\"node\", \".mastra/output/index.mjs\"]",
+        "Add `mastra` service to staging compose: build from `mastra/`, depends_on postgres, DATABASE_URL env pointing to postgres service, OPENAI_API_KEY from env",
+        "Update `backend` service in staging compose: add `MASTRA_URL=http://mastra:4111` env var",
+        "Update or create `.env.staging.example` with DATABASE_URL, MASTRA_URL, OPENAI_API_KEY"
       ],
-      "files": ["mastra/src/scripts/seed.ts"],
-      "verify": "cd mastra && npx tsc --noEmit --pretty 2>&1 | head -20",
-      "done": false
+      "files": ["docker-compose.dev.yml", "docker-compose.staging.yml", ".env.staging.example", "mastra/Dockerfile"],
+      "verify": "docker compose -f docker-compose.dev.yml config 2>&1 | head -5",
+      "done": true
     },
     {
       "id": 11,
       "phase": 5,
-      "description": "Add PostgreSQL and Mastra service to docker-compose for dev and staging.",
+      "description": "Create seed script with default test agents and run Drizzle migrations.",
       "steps": [
-        "Create `docker-compose.dev.yml` — postgres service only (for local dev): image postgres:16-alpine, port 5432, volume, env vars",
-        "Add `postgres` service to `docker-compose.staging.yml`: image postgres:16-alpine, volume, POSTGRES_DB/USER/PASSWORD",
-        "Create `mastra/Dockerfile`",
-        "Add `mastra` service to `docker-compose.staging.yml`: build from `mastra/`, depends_on postgres, DATABASE_URL pointing to postgres service",
-        "Update `backend` service in staging compose: add `MASTRA_URL=http://mastra:4111`",
-        "Update `.env.staging.example` with DATABASE_URL and MASTRA_URL"
+        "Create `mastra/src/scripts/seed.ts` — imports Drizzle db and schema",
+        "Insert 4 agents: Atlas (technical, source:mastra, color:#3b82f6, model:openai/gpt-4.1-mini), Nova (creative, source:mastra, color:#8b5cf6), Sage (conversational, source:mastra, color:#22c55e), Axiom (debate, source:mastra, color:#ef4444)",
+        "Each agent has meaningful instructions, category, color, icon, llm_model",
+        "Use `INSERT ... ON CONFLICT (name) DO NOTHING` pattern for idempotency (add unique constraint on name in schema if needed)",
+        "Add `seed` script to `mastra/package.json`: `tsx src/scripts/seed.ts`",
+        "Add `db:setup` script that runs `drizzle-kit migrate && tsx src/scripts/seed.ts`",
+        "Document in README or .env.example: run `docker compose -f docker-compose.dev.yml up -d` then `cd mastra && pnpm db:setup`"
       ],
-      "files": ["docker-compose.dev.yml", "docker-compose.staging.yml", ".env.staging.example", "mastra/Dockerfile"],
-      "verify": "docker compose -f docker-compose.dev.yml config 2>&1 | head -5",
-      "done": false
+      "files": ["mastra/src/scripts/seed.ts", "mastra/package.json"],
+      "verify": "cd mastra && pnpm exec tsc --noEmit --pretty 2>&1 | head -20",
+      "done": true
     }
   ]
 }

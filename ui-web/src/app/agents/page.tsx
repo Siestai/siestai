@@ -6,6 +6,8 @@ import { Bot, Plus, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { AgentCard } from "@/components/agents/agent-card";
+import { AgentFormDialog } from "@/components/agents/agent-form-dialog";
+import { DeleteAgentDialog } from "@/components/agents/delete-agent-dialog";
 import { api } from "@/lib/api";
 import { AGENT_CATEGORIES } from "@/lib/types";
 import type { Agent } from "@/lib/types";
@@ -20,16 +22,21 @@ export default function AgentsPage() {
   const [selectedCategory, setSelectedCategory] = useState("all");
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
+  // Dialog state
+  const [formOpen, setFormOpen] = useState(false);
+  const [editAgent, setEditAgent] = useState<Agent | undefined>(undefined);
+  const [deleteAgent, setDeleteAgent] = useState<Agent | null>(null);
+
   const fetchAgents = useCallback(
     async (search?: string, category?: string) => {
       try {
         setError(null);
         setLoading(true);
-        const response = await api.listAgents({
+        const agents = await api.listAgents({
           category: category && category !== "all" ? category : undefined,
           search: search || undefined,
         });
-        setAgents(response.agents);
+        setAgents(agents);
       } catch (err) {
         setError(
           err instanceof Error ? err.message : "Failed to load agents"
@@ -61,6 +68,25 @@ export default function AgentsPage() {
     );
   };
 
+  const handleCreate = () => {
+    setEditAgent(undefined);
+    setFormOpen(true);
+  };
+
+  const handleEdit = (agent: Agent) => {
+    setEditAgent(agent);
+    setFormOpen(true);
+  };
+
+  const handleSaved = () => {
+    fetchAgents(searchQuery, selectedCategory);
+  };
+
+  const handleDeleted = () => {
+    setDeleteAgent(null);
+    fetchAgents(searchQuery, selectedCategory);
+  };
+
   return (
     <div className="container mx-auto px-4 py-6 lg:px-6 lg:py-8">
       {/* Header */}
@@ -71,7 +97,7 @@ export default function AgentsPage() {
             Create and manage your AI conversation agents
           </p>
         </div>
-        <Button className="gap-2 shrink-0">
+        <Button className="gap-2 shrink-0" onClick={handleCreate}>
           <Plus className="h-4 w-4" />
           Create Agent
         </Button>
@@ -154,7 +180,7 @@ export default function AgentsPage() {
               ? "Try a different search or filter."
               : "Create your first agent to get started"}
           </p>
-          {(searchQuery || selectedCategory !== "all") && (
+          {searchQuery || selectedCategory !== "all" ? (
             <Button
               variant="outline"
               onClick={() => {
@@ -163,6 +189,11 @@ export default function AgentsPage() {
               }}
             >
               Clear Filters
+            </Button>
+          ) : (
+            <Button onClick={handleCreate}>
+              <Plus className="h-4 w-4 mr-2" />
+              Create Agent
             </Button>
           )}
         </div>
@@ -173,9 +204,31 @@ export default function AgentsPage() {
               key={agent.id}
               agent={agent}
               onStartChat={handleStartChat}
+              onEdit={handleEdit}
+              onDelete={setDeleteAgent}
             />
           ))}
         </div>
+      )}
+
+      {/* Create / Edit dialog */}
+      <AgentFormDialog
+        open={formOpen}
+        onOpenChange={setFormOpen}
+        agent={editAgent}
+        onSaved={handleSaved}
+      />
+
+      {/* Delete confirmation dialog */}
+      {deleteAgent && (
+        <DeleteAgentDialog
+          open={!!deleteAgent}
+          onOpenChange={(open) => {
+            if (!open) setDeleteAgent(null);
+          }}
+          agent={deleteAgent}
+          onDeleted={handleDeleted}
+        />
       )}
     </div>
   );

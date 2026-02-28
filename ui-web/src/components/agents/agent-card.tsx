@@ -1,17 +1,20 @@
 "use client";
 
 import Link from "next/link";
-import { Bot, Globe, Phone, Eye } from "lucide-react";
+import { Bot, Globe, Eye, MessageSquare, Pencil, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import type { Agent } from "@/lib/types";
 
 interface AgentCardProps {
   agent?: Agent;
   loading?: boolean;
   onStartChat?: (agent: Agent) => void;
+  onEdit?: (agent: Agent) => void;
+  onDelete?: (agent: Agent) => void;
 }
 
-export function AgentCard({ agent, loading, onStartChat }: AgentCardProps) {
+export function AgentCard({ agent, loading, onStartChat, onEdit, onDelete }: AgentCardProps) {
   if (loading || !agent) {
     return (
       <div className="rounded-xl border border-border bg-card overflow-hidden animate-pulse">
@@ -57,9 +60,14 @@ export function AgentCard({ agent, loading, onStartChat }: AgentCardProps) {
         <div className="min-w-0 flex-1">
           <p className="font-semibold text-foreground truncate">{agent.name}</p>
         </div>
+        {agent.source !== "mastra" && (
+          <Badge variant="secondary" className="text-[10px] shrink-0">
+            {agent.source}
+          </Badge>
+        )}
         <div
           className={`h-2 w-2 rounded-full shrink-0 ${
-            agent.is_online ? "bg-green-500" : "bg-gray-500"
+            agent.isOnline ? "bg-green-500" : "bg-gray-500"
           }`}
         />
       </div>
@@ -94,10 +102,6 @@ export function AgentCard({ agent, loading, onStartChat }: AgentCardProps) {
             <Globe className="h-3 w-3" />
             {agent.category}
           </span>
-          <span className="flex items-center gap-1">
-            <Phone className="h-3 w-3" />
-            {agent.call_count} calls
-          </span>
         </div>
       </div>
 
@@ -109,7 +113,7 @@ export function AgentCard({ agent, loading, onStartChat }: AgentCardProps) {
         <Button variant="ghost" size="sm" asChild className="flex-1">
           <Link href={`/agents/${agent.id}`}>
             <Eye className="h-3.5 w-3.5 mr-1.5" />
-            View Details
+            View
           </Link>
         </Button>
         <Button
@@ -117,9 +121,19 @@ export function AgentCard({ agent, loading, onStartChat }: AgentCardProps) {
           className="flex-1"
           onClick={() => onStartChat?.(agent)}
         >
-          <Phone className="h-3.5 w-3.5 mr-1.5" />
-          Start Chat
+          <MessageSquare className="h-3.5 w-3.5 mr-1.5" />
+          Chat
         </Button>
+        {onEdit && (
+          <Button variant="ghost" size="sm" onClick={() => onEdit(agent)}>
+            <Pencil className="h-3.5 w-3.5" />
+          </Button>
+        )}
+        {onDelete && (
+          <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={() => onDelete(agent)}>
+            <Trash2 className="h-3.5 w-3.5" />
+          </Button>
+        )}
       </div>
     </div>
   );
