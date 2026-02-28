@@ -11,6 +11,6 @@ export function createRuntimeAgent(record: DbAgent): Agent {
     id: record.id,
     name: record.name,
     instructions: record.instructions,
-    model: record.llmModel || 'openai/gpt-4.1-mini',
+    model: record.llmModel || 'anthropic/claude-sonnet-4-6',
   });
 }

@@ -35,7 +35,7 @@ const seedAgents = [
     color: '#3b82f6',
     icon: 'cpu',
     source: 'mastra' as const,
-    llmModel: 'openai/gpt-4.1-mini',
+    llmModel: 'anthropic/claude-sonnet-4-6',
   },
   {
     name: 'Nova',
@@ -48,7 +48,7 @@ const seedAgents = [
     color: '#8b5cf6',
     icon: 'sparkles',
     source: 'mastra' as const,
-    llmModel: 'openai/gpt-4.1-mini',
+    llmModel: 'anthropic/claude-sonnet-4-6',
   },
   {
     name: 'Sage',
@@ -61,7 +61,7 @@ const seedAgents = [
     color: '#22c55e',
     icon: 'heart',
     source: 'mastra' as const,
-    llmModel: 'openai/gpt-4.1-mini',
+    llmModel: 'anthropic/claude-sonnet-4-6',
   },
   {
     name: 'Axiom',
@@ -74,7 +74,7 @@ const seedAgents = [
     color: '#ef4444',
     icon: 'scale',
     source: 'mastra' as const,
-    llmModel: 'openai/gpt-4.1-mini',
+    llmModel: 'anthropic/claude-sonnet-4-6',
   },
 ];
 

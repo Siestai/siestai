@@ -1,0 +1,66 @@
+{
+  "title": "Dokploy Deployment Guide",
+  "plan": "records/plans/0004-dokploy-deployment-guide.md",
+  "tasks": [
+    {
+      "id": 1,
+      "phase": 1,
+      "description": "Create ui-web Dockerfile with multi-stage build for Next.js standalone output, accepting NEXT_PUBLIC_* as build args",
+      "steps": [
+        "Create `ui-web/Dockerfile` using node:22-alpine with multi-stage build",
+        "Stage 1 (build): corepack enable pnpm, install deps, accept NEXT_PUBLIC_API_URL and NEXT_PUBLIC_LIVEKIT_URL as ARG, run `pnpm build`",
+        "Stage 2 (run): copy standalone output + static + public dirs, expose 3000, CMD node server.js",
+        "Add `output: 'standalone'` to `ui-web/next.config.ts` (required for Docker deployment)",
+        "Create `ui-web/.dockerignore` with node_modules, .next, .git"
+      ],
+      "files": ["ui-web/Dockerfile", "ui-web/.dockerignore", "ui-web/next.config.ts"],
+      "verify": "cd ui-web && docker build --build-arg NEXT_PUBLIC_API_URL=http://localhost:4200 --build-arg NEXT_PUBLIC_LIVEKIT_URL=wss://test.livekit.cloud -t siestai-ui-web . && echo 'ui-web Dockerfile OK'",
+      "done": true
+    },
+    {
+      "id": 2,
+      "phase": 1,
+      "description": "Create backend Dockerfile for NestJS with multi-stage build, compiling TypeScript and running dist/main",
+      "steps": [
+        "Create `backend/Dockerfile` using node:22-alpine with multi-stage build",
+        "Stage 1 (build): corepack enable pnpm, install all deps, run `pnpm build` (nest build → dist/)",
+        "Stage 2 (run): copy dist/ and prod node_modules, expose 4200, CMD node dist/main",
+        "Create `backend/.dockerignore` with node_modules, dist, .git"
+      ],
+      "files": ["backend/Dockerfile", "backend/.dockerignore"],
+      "verify": "cd backend && docker build -t siestai-backend . && echo 'backend Dockerfile OK'",
+      "done": true
+    },
+    {
+      "id": 3,
+      "phase": 1,
+      "description": "Create agent Dockerfile for the LiveKit agent worker, using node:22-alpine with TypeScript compilation",
+      "steps": [
+        "Create `agent/Dockerfile` using node:22-alpine with multi-stage build",
+        "Stage 1 (build): corepack enable pnpm, install deps, run `pnpm build` (tsc → dist/)",
+        "Stage 2 (run): copy dist/ and prod node_modules, CMD node dist/main.js start",
+        "Create `agent/.dockerignore` with node_modules, dist, .git"
+      ],
+      "files": ["agent/Dockerfile", "agent/.dockerignore"],
+      "verify": "cd agent && docker build -t siestai-agent . && echo 'agent Dockerfile OK'",
+      "done": true
+    },
+    {
+      "id": 4,
+      "phase": 2,
+      "description": "Create docs/DOKPLOY-GUIDE.md covering the full deployment workflow: server prep, Dokploy install, Cloudflare DNS, and all 5 services (postgres, mastra, backend, agent, ui-web)",
+      "steps": [
+        "Create `docs/` directory",
+        "Write `docs/DOKPLOY-GUIDE.md` with sections: Prerequisites, Server Setup (Hetzner), Dokploy Installation, Cloudflare DNS Configuration, Project Setup in Dokploy, per-service configuration (postgres as Docker image, mastra/backend/agent/ui-web as GitHub repo builds), Environment Variables reference table, Domain & SSL setup, Health checks, Troubleshooting",
+        "For each service, document: build context path, Dockerfile path, exposed port, env vars (referencing .env.example files), domain mapping, depends-on relationships",
+        "Include Cloudflare DNS records: app.siestai.com → Hetzner IP, api.siestai.com → Hetzner IP",
+        "Note WebSocket gotcha: use DNS-only mode (gray cloud) or enable Cloudflare WebSocket support",
+        "Document the deploy order: postgres → mastra → backend → agent + ui-web (parallel)",
+        "Add section on future Kubernetes migration path as a note"
+      ],
+      "files": ["docs/DOKPLOY-GUIDE.md"],
+      "verify": "test -f docs/DOKPLOY-GUIDE.md && wc -l docs/DOKPLOY-GUIDE.md | awk '{if ($1 > 50) print \"DOKPLOY-GUIDE.md OK (\" $1 \" lines)\"; else print \"FAIL: too short\"}'",
+      "done": true
+    }
+  ]
+}

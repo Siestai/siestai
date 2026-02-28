@@ -5,5 +5,5 @@ export const defaultAgent = new Agent({
   name: 'Default Agent',
   instructions:
     'You are a helpful AI assistant. Respond clearly and concisely.',
-  model: 'openai/gpt-4.1-mini',
+  model: 'anthropic/claude-sonnet-4-6',
 });
