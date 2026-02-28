@@ -147,16 +147,7 @@ export function NavBar() {
                 name={session?.user?.name}
                 image={session?.user?.image}
               />
-              <span className="text-xs font-semibold text-muted-foreground">
-                {session?.user?.name
-                  ? session.user.name
-                      .split(" ")
-                      .map((n: string) => n[0])
-                      .join("")
-                      .slice(0, 2)
-                      .toUpperCase()
-                  : ""}
-              </span>
+              <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
             </button>
 
             {dropdownOpen && (
@@ -255,7 +246,7 @@ export function NavBar() {
                     "flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-lg transition-colors",
                     isActive
                       ? "bg-secondary text-foreground"
-                      : "text-muted-foreground hover:text-foreground hover:bg-secondary/50"
+                      : "text-muted-foreground hover:text-foreground hover:bg-secondary/50",
                   )}
                 >
                   <Icon className="h-4 w-4" />
