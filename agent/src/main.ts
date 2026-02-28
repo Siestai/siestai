@@ -16,6 +16,13 @@ const isDev = process.argv.includes('dev');
 
 const getLogger = () => log();
 
+process.on('uncaughtException', (err) => {
+  getLogger().error({ err }, 'Uncaught exception in agent process');
+});
+process.on('unhandledRejection', (reason) => {
+  getLogger().error({ reason }, 'Unhandled promise rejection in agent process');
+});
+
 const REQUIRED_ENV = ['LIVEKIT_URL', 'LIVEKIT_API_KEY', 'LIVEKIT_API_SECRET', 'OPENAI_API_KEY'] as const;
 
 function validateEnv(): void {
