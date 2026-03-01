@@ -15,6 +15,7 @@ import type {
   ArenaParticipant,
   ArenaSession,
   ArenaWsServerMessage,
+  TranscriptMessage,
 } from "./types";
 import {
   createArenaSession,
@@ -31,6 +32,7 @@ interface ArenaSessionContextValue {
   participants: ArenaParticipant[];
   connectionStatus: ConnectionStatus;
   liveState: ArenaLiveState | null;
+  wsMessages: TranscriptMessage[];
   createSession: (params: CreateArenaSessionParams) => Promise<void>;
   startListening: () => void;
   startCall: () => Promise<void>;
@@ -47,6 +49,7 @@ export function ArenaSessionProvider({ children }: { children: ReactNode }) {
   const [connectionStatus, setConnectionStatus] =
     useState<ConnectionStatus>("disconnected");
   const [liveState, setLiveState] = useState<ArenaLiveState | null>(null);
+  const [wsMessages, setWsMessages] = useState<TranscriptMessage[]>([]);
   const wsRef = useRef<WebSocket | null>(null);
 
   const cleanup = useCallback(() => {
@@ -106,6 +109,20 @@ export function ArenaSessionProvider({ children }: { children: ReactNode }) {
             console.log("[arena-ws] session_started, room:", msg.roomName);
           }
           break;
+        case "agent_message":
+        case "transcript": {
+          const ts = msg.timestamp ?? Date.now();
+          const wsMsg: TranscriptMessage = {
+            id: `ws-${ts}-${msg.speaker}`,
+            sender: "agent",
+            text: `[${msg.speaker}]: ${msg.text}`,
+            isFinal: true,
+            timestamp: ts,
+            source: "ws",
+          };
+          setWsMessages((prev) => [...prev, wsMsg]);
+          break;
+        }
         case "session_ended":
           setSession((prev) =>
             prev ? { ...prev, status: "ended" as const } : prev,
@@ -141,6 +158,7 @@ export function ArenaSessionProvider({ children }: { children: ReactNode }) {
     hostTokenRef.current = null;
     setParticipants([]);
     setLiveState(null);
+    setWsMessages([]);
   }, [cleanup]);
 
   // Close WS on unmount
@@ -154,6 +172,7 @@ export function ArenaSessionProvider({ children }: { children: ReactNode }) {
         participants,
         connectionStatus,
         liveState,
+        wsMessages,
         createSession: handleCreateSession,
         startListening,
         startCall,

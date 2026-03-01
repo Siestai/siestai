@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { CallTimer } from "@/components/live/call-timer";
 import { useConversationTranscript } from "@/hooks/use-conversation-transcript";
+import { useArenaSession } from "@/lib/arena-session-context";
 import { ArenaTranscript, ArenaTranscriptToggleButton } from "./arena-transcript";
 import { ExternalParticipantTile } from "./external-participant-tile";
 import type { ArenaParticipant, ParticipationMode, TranscriptMessage } from "@/lib/types";
@@ -230,7 +231,40 @@ export function ArenaRoom({
 }: ArenaRoomProps) {
   const { state: agentState } = useVoiceAssistant();
   const { localParticipant, isMicrophoneEnabled } = useLocalParticipant();
-  const { messages } = useConversationTranscript();
+  const { messages: livekitMessages } = useConversationTranscript();
+  const { wsMessages } = useArenaSession();
+
+  // Merge LiveKit and WS transcript streams with deduplication
+  const messages = useMemo(() => {
+    const DEDUP_WINDOW_MS = 5000;
+    // Start with all LiveKit messages
+    const merged: TranscriptMessage[] = [...livekitMessages];
+
+    for (const wsMsg of wsMessages) {
+      // Extract speaker from WS message text format "[Speaker]: content"
+      const wsMatch = wsMsg.text.match(SPEAKER_REGEX);
+      const wsSpeaker = wsMatch ? wsMatch[1] : "";
+      const wsContent = wsMatch ? wsMsg.text.slice(wsMatch[0].length) : wsMsg.text;
+
+      // Check for duplicates: same speaker + similar text within time window
+      const isDuplicate = livekitMessages.some((lkMsg) => {
+        if (Math.abs(lkMsg.timestamp - wsMsg.timestamp) > DEDUP_WINDOW_MS) return false;
+        const lkMatch = lkMsg.text.match(SPEAKER_REGEX);
+        const lkSpeaker = lkMatch ? lkMatch[1] : "";
+        const lkContent = lkMatch ? lkMsg.text.slice(lkMatch[0].length) : lkMsg.text;
+        if (lkSpeaker !== wsSpeaker) return false;
+        // starts-with match in either direction
+        return lkContent.startsWith(wsContent) || wsContent.startsWith(lkContent);
+      });
+
+      if (!isDuplicate) {
+        merged.push(wsMsg);
+      }
+    }
+
+    return merged.sort((a, b) => a.timestamp - b.timestamp);
+  }, [livekitMessages, wsMessages]);
+
   const activeSpeaker = useActiveSpeaker(messages);
   const [startTime] = useState(() => Date.now());
   const [sidebarOpen, setSidebarOpen] = useState(false);

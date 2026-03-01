@@ -119,6 +119,7 @@ export interface TranscriptMessage {
   text: string;
   isFinal: boolean;
   timestamp: number;
+  source?: "livekit" | "ws";
 }
 
 export type AgentState =

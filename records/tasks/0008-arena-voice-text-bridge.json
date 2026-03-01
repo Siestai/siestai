@@ -1,0 +1,146 @@
+{
+  "title": "Arena Voice-Text Bridge",
+  "plan": "records/plans/0008-arena-voice-text-bridge.md",
+  "tasks": [
+    {
+      "id": 1,
+      "phase": 1,
+      "description": "Add transcript POST endpoint and gateway broadcast method for LiveKit → WS bridge.",
+      "steps": [
+        "Add `broadcastTranscript(sessionId, speaker, text, timestamp)` method to `ArenaGateway` — broadcasts `{ type: 'transcript', speaker, text, timestamp }` to all WS clients in the session",
+        "Create DTO `backend/src/arena/dto/post-transcript.dto.ts` — fields: `speaker` (string, required), `text` (string, required), `timestamp` (number, optional, defaults to Date.now())",
+        "Add `POST /arena/sessions/:id/transcript` endpoint to `ArenaController` — validates session exists, calls `arenaGateway.broadcastTranscript()`, returns 204",
+        "Mark the endpoint `@AllowAnonymous()` since the agent worker calls it without user auth (same pattern as existing arena endpoints)"
+      ],
+      "files": [
+        "backend/src/arena/arena.gateway.ts",
+        "backend/src/arena/arena.controller.ts",
+        "backend/src/arena/dto/post-transcript.dto.ts"
+      ],
+      "verify": "cd backend && npx tsc --noEmit --pretty 2>&1 | head -20",
+      "done": true
+    },
+    {
+      "id": 2,
+      "phase": 1,
+      "description": "Add LiveKit data channel sending to gateway for WS → LiveKit bridge.",
+      "steps": [
+        "Inject `LivekitService` into `ArenaGateway` (add to constructor)",
+        "Add `sendDataToRoom(roomName, payload)` method to `LivekitService` — uses `RoomServiceClient.sendData()` to send a JSON-encoded buffer to the room with `topic: 'external-agent-msg'`",
+        "In `ArenaGateway.handleClientMessage()`, when processing a `message` type: after the existing `broadcastToSession()` call, also look up the session's `roomName` and if active, call `livekitService.sendDataToRoom(roomName, { type: 'external_agent_message', speaker, text })`. Wrap in try/catch so WS flow is not broken if LiveKit send fails.",
+        "Update `ArenaModule` providers/imports if needed for the new dependency"
+      ],
+      "files": [
+        "backend/src/arena/arena.gateway.ts",
+        "backend/src/livekit/livekit.service.ts",
+        "backend/src/arena/arena.module.ts"
+      ],
+      "verify": "cd backend && npx tsc --noEmit --pretty 2>&1 | head -20",
+      "done": true
+    },
+    {
+      "id": 3,
+      "phase": 1,
+      "description": "Extend room metadata with sessionId and backendUrl so the agent worker can post transcripts.",
+      "steps": [
+        "In `LivekitService.generateArenaToken()`, add `sessionId: session.id` to the metadata JSON object",
+        "Add `backendUrl` to metadata: read from `BACKEND_URL` env var (default `http://localhost:4200`)",
+        "Update `ArenaMetadata` interface in `agent/src/arena-agent.ts` to include optional `sessionId?: string` and `backendUrl?: string` fields",
+        "Add `BACKEND_URL` to `backend/.env.example` and `agent/.env.example`"
+      ],
+      "files": [
+        "backend/src/livekit/livekit.service.ts",
+        "agent/src/arena-agent.ts"
+      ],
+      "verify": "cd backend && npx tsc --noEmit --pretty 2>&1 | head -20",
+      "done": true
+    },
+    {
+      "id": 4,
+      "phase": 2,
+      "description": "Agent worker posts transcripts to backend after each assistant turn (LiveKit → WS direction).",
+      "steps": [
+        "In `agent/src/main.ts`, after the arena session starts, subscribe to `ConversationItemAdded` events for assistant messages",
+        "When an assistant message is finalized, extract the speaker name from `[Name]: text` format and POST to `${backendUrl}/arena/sessions/${sessionId}/transcript` with `{ speaker, text, timestamp: Date.now() }`",
+        "Use native `fetch()` for the HTTP call (Node 18+ built-in, no new dependencies)",
+        "Wrap in try/catch with a warning log on failure — never let a transcript post failure crash the agent or disrupt voice flow",
+        "Skip posting if `sessionId` or `backendUrl` are missing from metadata (backwards compatible with non-bridge sessions)"
+      ],
+      "files": [
+        "agent/src/main.ts"
+      ],
+      "verify": "cd agent && npx tsc --noEmit --pretty 2>&1 | head -20",
+      "done": true
+    },
+    {
+      "id": 5,
+      "phase": 2,
+      "description": "Agent worker listens for LiveKit data channel messages and injects external agent input (WS → LiveKit direction).",
+      "steps": [
+        "In `agent/src/main.ts`, after the arena session starts, listen for `RoomEvent.DataReceived` on `ctx.room`",
+        "Parse incoming data messages: expect JSON `{ type: 'external_agent_message', speaker: string, text: string }`",
+        "Filter by topic `'external-agent-msg'` to avoid processing unrelated data messages",
+        "When a valid external agent message arrives, inject it into the conversation via `session.generateReply({ userInput: '[External agent ${speaker} says]: ${text}' })`",
+        "Add a short debounce/cooldown (e.g. 1 second) to avoid flooding the LLM if multiple external agents send messages simultaneously",
+        "Log incoming external messages at debug level"
+      ],
+      "files": [
+        "agent/src/main.ts"
+      ],
+      "verify": "cd agent && npx tsc --noEmit --pretty 2>&1 | head -20",
+      "done": true
+    },
+    {
+      "id": 6,
+      "phase": 3,
+      "description": "ArenaSessionContext accumulates WS transcript and agent_message events into state.",
+      "steps": [
+        "In `ArenaSessionContext`, add `wsMessages` state: `useState<TranscriptMessage[]>([])`",
+        "In the WS `onmessage` handler, add cases for `type: 'agent_message'` and `type: 'transcript'` — convert to `TranscriptMessage` format: `{ id: 'ws-${timestamp}-${speaker}', sender: 'agent', text: '[${speaker}]: ${text}', isFinal: true, timestamp, source: 'ws' }`",
+        "Expose `wsMessages` from the context value",
+        "Update `ArenaSessionContextValue` interface to include `wsMessages: TranscriptMessage[]`",
+        "Clear `wsMessages` in `endSession()`"
+      ],
+      "files": [
+        "ui-web/src/lib/arena-session-context.tsx",
+        "ui-web/src/lib/types.ts"
+      ],
+      "verify": "cd ui-web && npx tsc --noEmit --pretty 2>&1 | head -20",
+      "done": true
+    },
+    {
+      "id": 7,
+      "phase": 3,
+      "description": "Extend TranscriptMessage type with optional source field for origin tracking.",
+      "steps": [
+        "Add optional `source?: 'livekit' | 'ws'` field to `TranscriptMessage` interface in `ui-web/src/lib/types.ts`",
+        "In `use-conversation-transcript.ts`, tag messages with `source: 'livekit'` when creating them",
+        "This field enables deduplication and lets the UI distinguish message origins if needed in the future"
+      ],
+      "files": [
+        "ui-web/src/lib/types.ts",
+        "ui-web/src/hooks/use-conversation-transcript.ts"
+      ],
+      "verify": "cd ui-web && npx tsc --noEmit --pretty 2>&1 | head -20",
+      "done": true
+    },
+    {
+      "id": 8,
+      "phase": 3,
+      "description": "ArenaRoom merges LiveKit and WS transcript streams with deduplication.",
+      "steps": [
+        "In `ArenaRoom`, import `useArenaSession` and get `wsMessages` from context",
+        "Create a `useMergedTranscript` hook or inline `useMemo` that merges `messages` (from `useConversationTranscript`) with `wsMessages` (from context)",
+        "Sort merged array by timestamp",
+        "Deduplicate: if a WS `transcript` message has the same speaker and similar text (e.g. starts-with match) as a LiveKit message within a 5-second window, drop the WS duplicate. This handles the case where the host UI sees the same voice agent message from both LiveKit transcription and the backend's WS broadcast.",
+        "Pass the merged messages to `ArenaTranscript` and `useActiveSpeaker`",
+        "External agent messages (from WS `agent_message` type) will appear in the transcript with their speaker name and color, using the same `[Name]: text` parsing already in `ArenaTranscript`"
+      ],
+      "files": [
+        "ui-web/src/components/arena/arena-room.tsx"
+      ],
+      "verify": "cd ui-web && npx tsc --noEmit --pretty 2>&1 | head -20",
+      "done": true
+    }
+  ]
+}

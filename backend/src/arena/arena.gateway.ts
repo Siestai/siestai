@@ -7,6 +7,7 @@ import { IncomingMessage } from 'http';
 import { WebSocket } from 'ws';
 import { InvitationService, InvitePayload } from './invitation.service';
 import { ArenaService } from './arena.service';
+import { LivekitService } from '../livekit/livekit.service';
 import { ArenaParticipant } from './arena.interfaces';
 
 interface ClientInfo {
@@ -38,6 +39,7 @@ export class ArenaGateway
   constructor(
     private readonly invitationService: InvitationService,
     private readonly arenaService: ArenaService,
+    private readonly livekitService: LivekitService,
   ) {}
 
   handleConnection(client: WebSocket, req: IncomingMessage): void {
@@ -201,7 +203,34 @@ export class ArenaGateway
         },
         client,
       );
+
+      // Bridge to LiveKit data channel so voice agent can hear external agents
+      if (session?.roomName) {
+        this.livekitService
+          .sendDataToRoom(session.roomName, {
+            type: 'external_agent_message',
+            speaker,
+            text: msg.text,
+          })
+          .catch(() => {
+            // Don't break WS flow if LiveKit send fails
+          });
+      }
     }
+  }
+
+  broadcastTranscript(
+    sessionId: string,
+    speaker: string,
+    text: string,
+    timestamp: number,
+  ): void {
+    this.broadcastToSession(sessionId, {
+      type: 'transcript',
+      speaker,
+      text,
+      timestamp,
+    });
   }
 
   broadcastSessionStarted(sessionId: string, roomName: string): void {
