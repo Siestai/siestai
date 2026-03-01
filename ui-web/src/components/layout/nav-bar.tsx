@@ -8,6 +8,7 @@ import {
   Bot,
   Network as ArenaIcon,
   Phone,
+  Wrench,
   Settings,
   Menu,
   X,
@@ -24,6 +25,7 @@ const navItems = [
   { href: "/agents", label: "Agents", icon: Bot },
   { href: "/arena", label: "Arena", icon: ArenaIcon },
   { href: "/live", label: "Live", icon: Phone },
+  { href: "/tools", label: "Tools", icon: Wrench },
 ];
 
 function UserAvatar({

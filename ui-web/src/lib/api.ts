@@ -9,6 +9,9 @@ import type {
   HealthResponse,
   AgentPreviewRequest,
   ActivityEvent,
+  AgentFile,
+  Tool,
+  AgentTool,
 } from "./types";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4200";
@@ -74,6 +77,54 @@ class ApiClient {
 
   async deleteAgent(id: string): Promise<void> {
     await this.request(`/agents/${id}`, { method: "DELETE" });
+  }
+
+  // Agent files
+  async listAgentFiles(agentId: string): Promise<AgentFile[]> {
+    return this.request<AgentFile[]>(`/agents/${agentId}/files`);
+  }
+
+  async uploadAgentFile(agentId: string, file: File): Promise<AgentFile> {
+    const formData = new FormData();
+    formData.append("file", file);
+    const res = await fetch(`${this.baseUrl}/agents/${agentId}/files`, {
+      method: "POST",
+      credentials: "include",
+      body: formData,
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.message || `Upload failed (${res.status})`);
+    }
+    return res.json();
+  }
+
+  async deleteAgentFile(agentId: string, fileId: string): Promise<void> {
+    await this.request(`/agents/${agentId}/files/${fileId}`, {
+      method: "DELETE",
+    });
+  }
+
+  // Tools
+  async listTools(): Promise<Tool[]> {
+    return this.request<Tool[]>("/tools");
+  }
+
+  async listAgentTools(agentId: string): Promise<AgentTool[]> {
+    return this.request<AgentTool[]>(`/agents/${agentId}/tools`);
+  }
+
+  async connectAgentTool(agentId: string, toolId: string): Promise<AgentTool> {
+    return this.request<AgentTool>(`/agents/${agentId}/tools`, {
+      method: "POST",
+      body: JSON.stringify({ toolId }),
+    });
+  }
+
+  async disconnectAgentTool(agentId: string, toolId: string): Promise<void> {
+    await this.request(`/agents/${agentId}/tools/${toolId}`, {
+      method: "DELETE",
+    });
   }
 
   // Agent preview

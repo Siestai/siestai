@@ -35,6 +35,36 @@ export type CreateAgentData = {
 
 export type UpdateAgentData = Partial<CreateAgentData>;
 
+// Agent file types
+export interface AgentFile {
+  id: string;
+  agentId: string;
+  filename: string;
+  filePath: string;
+  mimeType: string | null;
+  fileSize: number | null;
+  createdAt: string;
+}
+
+// Tool types
+export interface Tool {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  category: string;
+  isActive: boolean;
+  createdAt: string;
+}
+
+export interface AgentTool {
+  id: string;
+  agentId: string;
+  toolId: string;
+  config: Record<string, unknown>;
+  createdAt: string;
+}
+
 // Arena types
 export interface ArenaAgentConfig {
   name: string;

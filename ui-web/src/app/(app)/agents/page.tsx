@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Bot, Plus, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AgentCard } from "@/components/agents/agent-card";
-import { AgentFormDialog } from "@/components/agents/agent-form-dialog";
+import { CreateAgentDialog } from "@/components/agents/create-agent-dialog";
 import { DeleteAgentDialog } from "@/components/agents/delete-agent-dialog";
 import { api } from "@/lib/api";
 import { AGENT_CATEGORIES } from "@/lib/types";
@@ -21,8 +21,7 @@ export default function AgentsPage() {
   const [selectedCategory, setSelectedCategory] = useState("all");
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
-  const [editAgent, setEditAgent] = useState<Agent | undefined>(undefined);
-  const [editFormOpen, setEditFormOpen] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
   const [deleteAgent, setDeleteAgent] = useState<Agent | null>(null);
 
   const fetchAgents = useCallback(
@@ -67,16 +66,11 @@ export default function AgentsPage() {
   };
 
   const handleCreate = () => {
-    router.push("/agents/new");
+    setCreateOpen(true);
   };
 
   const handleEdit = (agent: Agent) => {
-    setEditAgent(agent);
-    setEditFormOpen(true);
-  };
-
-  const handleSaved = () => {
-    fetchAgents(searchQuery, selectedCategory);
+    router.push(`/agents/${agent.id}`);
   };
 
   const handleDeleted = () => {
@@ -211,11 +205,9 @@ export default function AgentsPage() {
         </div>
       )}
 
-      <AgentFormDialog
-        open={editFormOpen}
-        onOpenChange={setEditFormOpen}
-        agent={editAgent}
-        onSaved={handleSaved}
+      <CreateAgentDialog
+        open={createOpen}
+        onOpenChange={setCreateOpen}
       />
 
       {deleteAgent && (

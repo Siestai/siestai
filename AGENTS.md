@@ -112,6 +112,41 @@ Single PostgreSQL instance, database `siestai`.
 | created_at | timestamp | now() |
 | updated_at | timestamp | now() |
 
+### `agent_files` table (Drizzle-managed)
+
+| Column | Type | Default |
+|--------|------|---------|
+| id | uuid PK | gen_random_uuid() |
+| agent_id | uuid NOT NULL (FK→agents.id, CASCADE) | — |
+| filename | varchar(255) NOT NULL | — |
+| file_path | text NOT NULL | — |
+| mime_type | varchar(100) | null |
+| file_size | integer | null |
+| created_at | timestamp | now() |
+
+### `tools` table (Drizzle-managed)
+
+| Column | Type | Default |
+|--------|------|---------|
+| id | uuid PK | gen_random_uuid() |
+| name | varchar(100) UNIQUE NOT NULL | — |
+| description | text | '' |
+| icon | varchar(50) | 'wrench' |
+| category | varchar(50) | 'utility' |
+| is_active | boolean | true |
+| created_at | timestamp | now() |
+
+### `agent_tools` table (Drizzle-managed)
+
+| Column | Type | Default |
+|--------|------|---------|
+| id | uuid PK | gen_random_uuid() |
+| agent_id | uuid NOT NULL (FK→agents.id, CASCADE) | — |
+| tool_id | uuid NOT NULL (FK→tools.id, CASCADE) | — |
+| config | jsonb | '{}' |
+| created_at | timestamp | now() |
+| | UNIQUE(agent_id, tool_id) | |
+
 ### Seed Agents
 
 | Name | Category | Color | LLM |
@@ -131,8 +166,9 @@ Single PostgreSQL instance, database `siestai`.
 |-------|-------------|
 | `/auth/login` | Google OAuth login page (no NavBar) — `(auth)` route group |
 | `/` | Dashboard — quick actions, recent agents (hardcoded), activity |
-| `/agents` | Agent list — real API, search/filter, create/edit/delete |
-| `/agents/[id]` | Agent detail — overview, config, history tabs |
+| `/agents` | Agent list — real API, search/filter, create dialog (name + instructions) |
+| `/agents/[id]` | Agent detail/edit — modular sections: avatar, instructions, model, files, tools, skills, settings (auto-save) |
+| `/tools` | Tools marketplace — browse available tools, category filter |
 | `/arena` | Multi-agent arena — 3-step wizard → waiting room → live room → ended |
 | `/live` | 1:1 voice chat — LiveKit room, transcript sidebar, controls |
 | `/profile` | User profile — edit display name, view account info |
@@ -148,6 +184,7 @@ Single PostgreSQL instance, database `siestai`.
 - `lib/live-session-context.tsx` — global LiveKit session context
 - `lib/arena-session-context.tsx` — arena page context (WebSocket + state machine)
 - `lib/types.ts` — all TypeScript interfaces
+- `hooks/use-agent-editor.ts` — agent detail page auto-save hook (debounced updateField, save status)
 - `hooks/use-conversation-transcript.ts` — transcript from LiveKit voice events
 - `middleware.ts` — session check on every navigation, redirects to `/auth/login` if unauthenticated
 
@@ -165,10 +202,14 @@ Single PostgreSQL instance, database `siestai`.
 | Agents | `GET/POST/PUT/DELETE /agents` | CRUD via raw pg Pool, user_id ownership |
 | Livekit | `POST /livekit/token` | LiveKit token generation + agent dispatch |
 | Arena | `POST /arena/sessions`, `GET /arena/sessions/:id`, `POST /arena/sessions/:id/start`, `POST /arena/join`, `WS /arena/ws` | Session lifecycle + WebSocket relay |
+| AgentFiles | `GET/POST/DELETE /agents/:id/files`, `GET /agents/:id/files/:fileId/download` | Multipart upload (multer, 10MB), file CRUD, disk storage |
+| Tools | `GET /tools`, `GET/POST/DELETE /agents/:id/tools` | Tools marketplace CRUD, agent-tool connections. Seeds 6 placeholder tools on init |
 | Root | `GET /` | Health check (`@AllowAnonymous`) |
 
 **Key services:**
 - `AgentsService` — pg.Pool queries, dynamic SET builder for updates, user_id filtering
+- `AgentFilesService` — file upload to `uploads/agents/{agentId}/`, disk + DB management
+- `ToolsService` — tools CRUD, agent-tool connections, auto-seeds placeholder tools
 - `ArenaService` — in-memory `Map<string, ArenaSession>`, 1hr expiry
 - `InvitationService` — JWT sign/verify for arena invites (host + agent roles)
 - `ArenaGateway` — WebSocket: identify, message relay, system broadcasts
@@ -183,7 +224,7 @@ Single PostgreSQL instance, database `siestai`.
 - Storage: `@mastra/pg` PostgresStore (auto-creates internal tables)
 - `agent-crud.ts` — Drizzle-based CRUD (used by seed script, not by backend at runtime)
 - `runtime.ts` — `createRuntimeAgent()` for dynamic agent instantiation from DB records
-- Migrations: `drizzle-kit generate && drizzle-kit migrate`
+- Migrations: `drizzle-kit generate --name=<descriptive_name> && drizzle-kit migrate`
 
 ### agent (LiveKit Voice Worker)
 
@@ -242,6 +283,7 @@ make nuke     # full reset (stop + clean node_modules + destroy db)
 - **Auth:** Google OAuth via Better Auth + `@thallesp/nestjs-better-auth`. Session cookies, global AuthGuard. `@AllowAnonymous()` for public endpoints.
 - **No ORM in backend** — raw pg queries (NestJS); Drizzle only in mastra/ for migrations
 - **ESM everywhere** — all packages use `"type": "module"`
+- **Migration names must be meaningful** — always use `drizzle-kit generate --name=<descriptive_name>` (e.g. `create_agents_table`, `add_agent_files_and_tools`). Never accept Drizzle's random codenames.
 
 ## Installed Skills
 

@@ -7,6 +7,8 @@ import {
   boolean,
   timestamp,
   jsonb,
+  integer,
+  unique,
 } from 'drizzle-orm/pg-core';
 
 // ── Better Auth core tables ──────────────────────────────────────────
@@ -94,3 +96,45 @@ export const agents = pgTable('agents', {
 
 export type Agent = typeof agents.$inferSelect;
 export type NewAgent = typeof agents.$inferInsert;
+
+// ── Agent files ─────────────────────────────────────────────────────
+
+export const agentFiles = pgTable('agent_files', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  agentId: uuid('agent_id')
+    .notNull()
+    .references(() => agents.id, { onDelete: 'cascade' }),
+  filename: varchar('filename', { length: 255 }).notNull(),
+  filePath: text('file_path').notNull(),
+  mimeType: varchar('mime_type', { length: 100 }),
+  fileSize: integer('file_size'),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+// ── Tools marketplace ───────────────────────────────────────────────
+
+export const tools = pgTable('tools', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  name: varchar('name', { length: 100 }).notNull().unique(),
+  description: text('description').default(''),
+  icon: varchar('icon', { length: 50 }).default('wrench'),
+  category: varchar('category', { length: 50 }).default('utility'),
+  isActive: boolean('is_active').default(true),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+export const agentTools = pgTable(
+  'agent_tools',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    agentId: uuid('agent_id')
+      .notNull()
+      .references(() => agents.id, { onDelete: 'cascade' }),
+    toolId: uuid('tool_id')
+      .notNull()
+      .references(() => tools.id, { onDelete: 'cascade' }),
+    config: jsonb('config').$type<Record<string, unknown>>().default({}),
+    createdAt: timestamp('created_at').defaultNow(),
+  },
+  (t) => [unique().on(t.agentId, t.toolId)],
+);
