@@ -1,5 +1,5 @@
 import { cli, defineAgent, log, ServerOptions, voice } from '@livekit/agents';
-import { Room, RoomEvent } from '@livekit/rtc-node';
+import { Room, RoomEvent, DataPacketKind, RemoteParticipant } from '@livekit/rtc-node';
 import { VAD } from '@livekit/agents-plugin-silero';
 import { LLM as OpenAILLM, STT as OpenAISTT, TTS as OpenAITTS } from '@livekit/agents-plugin-openai';
 import { turnDetector } from '@livekit/agents-plugin-livekit';
@@ -139,7 +139,7 @@ function setupDataChannelListener(
   let lastInjectionTime = 0;
   const COOLDOWN_MS = 1000;
 
-  room.on(RoomEvent.DataReceived, (payload, _participant, _kind, topic) => {
+  room.on(RoomEvent.DataReceived, (payload: Uint8Array, _participant?: RemoteParticipant, _kind?: DataPacketKind, topic?: string) => {
     if (topic !== 'external-agent-msg') return;
 
     let msg: { type?: string; speaker?: string; text?: string };
