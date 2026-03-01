@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, Post } from '@nestjs/common';
 import { AllowAnonymous } from '@thallesp/nestjs-better-auth';
 import { ArenaService } from './arena.service';
 import { InvitationService } from './invitation.service';
@@ -6,6 +6,7 @@ import { LivekitService } from '../livekit/livekit.service';
 import { ArenaGateway } from './arena.gateway';
 import { CreateArenaSessionDto } from './dto/create-arena-session.dto';
 import { JoinArenaDto } from './dto/join-arena.dto';
+import { PostTranscriptDto } from './dto/post-transcript.dto';
 
 @Controller('arena')
 export class ArenaController {
@@ -39,6 +40,22 @@ export class ArenaController {
       serverUrl: result.serverUrl,
       roomName: result.roomName,
     };
+  }
+
+  @Post('sessions/:id/transcript')
+  @AllowAnonymous()
+  @HttpCode(204)
+  postTranscript(
+    @Param('id') id: string,
+    @Body() dto: PostTranscriptDto,
+  ): void {
+    this.arenaService.getSession(id);
+    this.arenaGateway.broadcastTranscript(
+      id,
+      dto.speaker,
+      dto.text,
+      dto.timestamp ?? Date.now(),
+    );
   }
 
   @Post('join')

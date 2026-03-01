@@ -5,7 +5,11 @@ import {
   AgentDispatchClient,
   RoomServiceClient,
 } from 'livekit-server-sdk';
-import { RoomAgentDispatch, RoomConfiguration } from '@livekit/protocol';
+import {
+  DataPacket_Kind,
+  RoomAgentDispatch,
+  RoomConfiguration,
+} from '@livekit/protocol';
 import { CreateTokenDto } from './dto/create-token.dto';
 // TODO: Consider moving ArenaSession to a shared types folder if more cross-module deps emerge
 import { ArenaSession } from '../arena/arena.interfaces';
@@ -85,6 +89,9 @@ export class LivekitService {
     const roomName = `arena-${randomBytes(4).toString('hex')}`;
     const identity = `user-${randomBytes(4).toString('hex')}`;
 
+    const backendUrl =
+      this.configService.get<string>('BACKEND_URL') || 'http://localhost:4200';
+
     const metadata = JSON.stringify({
       type: 'arena',
       agents: session.participants
@@ -93,6 +100,8 @@ export class LivekitService {
       mode: session.mode,
       topic: session.topic,
       participationMode: session.participationMode,
+      sessionId: session.id,
+      backendUrl,
     });
 
     if (Buffer.byteLength(metadata, 'utf8') > 60 * 1024) {
@@ -123,5 +132,15 @@ export class LivekitService {
       serverUrl,
       roomName,
     };
+  }
+
+  async sendDataToRoom(
+    roomName: string,
+    payload: Record<string, unknown>,
+  ): Promise<void> {
+    const data = new TextEncoder().encode(JSON.stringify(payload));
+    await this.roomService.sendData(roomName, data, DataPacket_Kind.RELIABLE, {
+      topic: 'external-agent-msg',
+    });
   }
 }
