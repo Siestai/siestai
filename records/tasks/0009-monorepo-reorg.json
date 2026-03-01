@@ -1,0 +1,348 @@
+{
+  "title": "Monorepo Reorganization (Turborepo + pnpm Workspaces)",
+  "plan": "records/plans/0009-monorepo-reorg.md",
+  "tasks": [
+    {
+      "id": 1,
+      "phase": 1,
+      "description": "Create root workspace config — package.json, pnpm-workspace.yaml, turbo.json, root tsconfig, .npmrc. This is the foundation everything else builds on.",
+      "steps": [
+        "Create root `package.json` with name `@siestai/root`, private:true, type:module, packageManager pnpm, scripts: dev, build, test, lint, db:migrate, db:seed, db:setup, dev:web, dev:api, dev:agent, dev:db, clean (all via turbo run or scripts/dev-db.sh)",
+        "Create `pnpm-workspace.yaml` with `packages: ['apps/*', 'packages/*']`",
+        "Create `turbo.json` with tasks: build (dependsOn ^build, outputs dist/**,.next/**), dev (persistent, cache:false), test (dependsOn ^build), lint, db:migrate (cache:false), db:seed (cache:false)",
+        "Create root `tsconfig.json` with shared compilerOptions (target ES2022, strict, skipLibCheck, esModuleInterop, resolveJsonModule, isolatedModules)",
+        "Create `.npmrc` with `shamefully-hoist=true` (required for NestJS reflect-metadata) and `strict-peer-dependencies=false`",
+        "Verify `.nvmrc` is at root (already there, pinned to 22)"
+      ],
+      "files": [
+        "package.json",
+        "pnpm-workspace.yaml",
+        "turbo.json",
+        "tsconfig.json",
+        ".npmrc"
+      ],
+      "verify": "cat package.json && cat pnpm-workspace.yaml && cat turbo.json",
+      "done": true
+    },
+    {
+      "id": 2,
+      "phase": 1,
+      "description": "Create packages/tsconfig with shared TypeScript config bases for NestJS, Next.js, and library packages to ensure consistent compilation across the monorepo.",
+      "steps": [
+        "Create `packages/tsconfig/package.json` (name @siestai/tsconfig, private:true — no type:module needed, this is just JSON configs)",
+        "Create `packages/tsconfig/base.json` — shared base (target ES2022, strict, skipLibCheck, esModuleInterop, resolveJsonModule, isolatedModules, module ES2022, moduleResolution bundler)",
+        "Create `packages/tsconfig/nestjs.json` — extends base, adds experimentalDecorators, emitDecoratorMetadata, module nodenext, moduleResolution nodenext, declaration, sourceMap, outDir dist, strictNullChecks true, noImplicitAny false, strictBindCallApply false (matching current backend tsconfig)",
+        "Create `packages/tsconfig/nextjs.json` — extends base, adds target ES2017, jsx react-jsx, module esnext, moduleResolution bundler, plugins [{name: next}], noEmit, incremental, lib [dom, dom.iterable, esnext], allowJs true",
+        "Create `packages/tsconfig/library.json` — extends base, adds declaration, declarationMap, composite, outDir dist, rootDir src"
+      ],
+      "files": [
+        "packages/tsconfig/package.json",
+        "packages/tsconfig/base.json",
+        "packages/tsconfig/nestjs.json",
+        "packages/tsconfig/nextjs.json",
+        "packages/tsconfig/library.json"
+      ],
+      "verify": "ls packages/tsconfig/ && cat packages/tsconfig/base.json",
+      "done": true
+    },
+    {
+      "id": 3,
+      "phase": 2,
+      "description": "Create packages/db — extract Drizzle schema, migrations, client factory, and seed script from mastra/ into a shared workspace package.",
+      "steps": [
+        "Create `packages/db/package.json` (name @siestai/db, type:module, main dist/index.js, exports ./: dist/index.js, scripts: generate, migrate, seed, db:setup, build via tsc)",
+        "Create `packages/db/tsconfig.json` extending @siestai/tsconfig/library.json",
+        "Split `mastra/src/db/schema.ts` into `packages/db/src/schema/`: auth.ts (user, session, account, verification), agents.ts (agents, agentSourceEnum, Agent/NewAgent types), files.ts (agentFiles), tools.ts (tools, agentTools). Create index.ts re-exporting all.",
+        "Copy `mastra/src/db/index.ts` → `packages/db/src/client.ts` (Drizzle client factory — Pool + drizzle wrapper, exports db instance)",
+        "Create `packages/db/src/index.ts` — re-export everything: schema tables, types, db client, and drizzle-orm operators (eq, and, or, ilike, sql, desc) so consumers don't need direct drizzle-orm dep",
+        "Copy `mastra/drizzle.config.ts` → `packages/db/drizzle.config.ts` (update schema path to ./src/schema/index.ts)",
+        "Copy entire `mastra/drizzle/` → `packages/db/drizzle/` — ALL files including meta/_journal.json and meta/0000_snapshot.json, 0001_snapshot.json, 0002_snapshot.json. These are critical for drizzle-kit migration tracking.",
+        "Copy `mastra/src/scripts/seed.ts` → `packages/db/src/seed.ts` (update imports to use local schema/client)",
+        "Add deps: drizzle-orm, pg, dotenv. DevDeps: drizzle-kit, tsx, typescript, @types/pg, @siestai/tsconfig (workspace:*)"
+      ],
+      "files": [
+        "packages/db/package.json",
+        "packages/db/tsconfig.json",
+        "packages/db/drizzle.config.ts",
+        "packages/db/src/index.ts",
+        "packages/db/src/client.ts",
+        "packages/db/src/seed.ts",
+        "packages/db/src/schema/index.ts",
+        "packages/db/src/schema/auth.ts",
+        "packages/db/src/schema/agents.ts",
+        "packages/db/src/schema/files.ts",
+        "packages/db/src/schema/tools.ts",
+        "packages/db/drizzle/meta/_journal.json",
+        "packages/db/drizzle/meta/0000_snapshot.json",
+        "packages/db/drizzle/meta/0001_snapshot.json",
+        "packages/db/drizzle/meta/0002_snapshot.json",
+        "packages/db/drizzle/0000_create_agents_table.sql",
+        "packages/db/drizzle/0001_add_better_auth_tables.sql",
+        "packages/db/drizzle/0002_add_agent_files_and_tools.sql"
+      ],
+      "verify": "cd packages/db && pnpm build",
+      "done": true
+    },
+    {
+      "id": 4,
+      "phase": 2,
+      "description": "Create packages/shared — extract and unify TypeScript types, constants, and enums from ui-web/src/lib/types.ts and backend DTOs into a single shared package.",
+      "steps": [
+        "Create `packages/shared/package.json` (name @siestai/shared, type:module, main dist/index.js, exports, build via tsc)",
+        "Create `packages/shared/tsconfig.json` extending @siestai/tsconfig/library.json",
+        "Create `packages/shared/src/types/agent.ts` — Agent, CreateAgentData, UpdateAgentData, AgentSource, AgentFile, AGENT_CATEGORIES, AGENT_CARD_COLORS",
+        "Create `packages/shared/src/types/arena.ts` — all Arena* types (ArenaAgentConfig, ArenaMode, ParticipationMode, ArenaSessionStatus, ArenaParticipantType, ArenaParticipantStatus, ArenaParticipant, ArenaSession, ArenaInvite), ArenaWsServerMessage, ArenaWsClientMessage",
+        "Create `packages/shared/src/types/livekit.ts` — LiveConnectionState, TranscriptMessage, AgentState, LiveSessionState, ArenaLiveState",
+        "Create `packages/shared/src/types/tool.ts` — Tool, AgentTool",
+        "Create `packages/shared/src/types/api.ts` — HealthResponse, ApiError, SessionListResponse, ConversationSession, ActivityEvent, AgentPreviewRequest",
+        "Create `packages/shared/src/index.ts` — re-export all types from all files",
+        "Add devDeps: typescript, @siestai/tsconfig (workspace:*)"
+      ],
+      "files": [
+        "packages/shared/package.json",
+        "packages/shared/tsconfig.json",
+        "packages/shared/src/index.ts",
+        "packages/shared/src/types/agent.ts",
+        "packages/shared/src/types/arena.ts",
+        "packages/shared/src/types/livekit.ts",
+        "packages/shared/src/types/tool.ts",
+        "packages/shared/src/types/api.ts"
+      ],
+      "verify": "cd packages/shared && pnpm build",
+      "done": true
+    },
+    {
+      "id": 5,
+      "phase": 3,
+      "description": "Move ui-web/ → apps/web/, update configs, wire up workspace deps. Run pnpm install after to resolve workspace links.",
+      "steps": [
+        "Create `apps/` directory if not exists",
+        "git mv `ui-web/` → `apps/web/`",
+        "Update `apps/web/package.json`: name → @siestai/web, add deps: @siestai/shared (workspace:*), devDeps: @siestai/tsconfig (workspace:*)",
+        "Update `apps/web/tsconfig.json`: add `extends: '@siestai/tsconfig/nextjs.json'`, keep paths alias @/* → ./src/*. Keep all existing includes.",
+        "Replace `apps/web/src/lib/types.ts` with re-exports: `export * from '@siestai/shared'` (preserves all existing import sites)",
+        "Delete per-service lockfile: `apps/web/pnpm-lock.yaml` (if exists, root lockfile replaces it)"
+      ],
+      "files": [
+        "apps/web/package.json",
+        "apps/web/tsconfig.json",
+        "apps/web/src/lib/types.ts"
+      ],
+      "verify": "test -d apps/web/src && cat apps/web/package.json | grep @siestai/web",
+      "done": true
+    },
+    {
+      "id": 6,
+      "phase": 3,
+      "description": "Move backend/ → apps/api/, absorb Mastra code, wire up workspace deps.",
+      "steps": [
+        "git mv `backend/` → `apps/api/`",
+        "Update `apps/api/package.json`: name → @siestai/api, add deps: @siestai/db (workspace:*), @siestai/shared (workspace:*), @mastra/core (latest), @mastra/pg (latest). Add devDeps: @siestai/tsconfig (workspace:*). Keep drizzle-orm as direct dep (needed for query operators in service files).",
+        "Update `apps/api/tsconfig.json`: add `extends: '@siestai/tsconfig/nestjs.json'`, keep baseUrl ./",
+        "If `apps/api/nest-cli.json` exists, verify its tsConfigPath is correct (should be ./tsconfig.json or tsconfig.build.json)",
+        "Copy `mastra/src/agents/runtime.ts` → `apps/api/src/mastra/runtime.ts`, update imports: schema from @siestai/db, Agent from @mastra/core",
+        "Copy `mastra/src/mastra/index.ts` → `apps/api/src/mastra/instance.ts`, update imports: schema from @siestai/db, Agent from @mastra/core, PostgresStore from @mastra/pg",
+        "Delete per-service lockfile: `apps/api/pnpm-lock.yaml` (if exists)"
+      ],
+      "files": [
+        "apps/api/package.json",
+        "apps/api/tsconfig.json",
+        "apps/api/src/mastra/runtime.ts",
+        "apps/api/src/mastra/instance.ts"
+      ],
+      "verify": "test -d apps/api/src && cat apps/api/package.json | grep @siestai/api",
+      "done": true
+    },
+    {
+      "id": 7,
+      "phase": 3,
+      "description": "Move agent/ → apps/agent/, update tsconfig to extend shared base.",
+      "steps": [
+        "git mv `agent/` → `apps/agent/`",
+        "Update `apps/agent/package.json`: keep name @siestai/agent, add devDeps: @siestai/tsconfig (workspace:*)",
+        "Update `apps/agent/tsconfig.json`: add `extends: '@siestai/tsconfig/base.json'`, override module to NodeNext, moduleResolution to NodeNext, keep outDir dist, rootDir src, declaration, sourceMap",
+        "Delete per-service lockfile: `apps/agent/pnpm-lock.yaml` (if exists)"
+      ],
+      "files": [
+        "apps/agent/package.json",
+        "apps/agent/tsconfig.json"
+      ],
+      "verify": "test -d apps/agent/src && cat apps/agent/package.json | grep @siestai/agent",
+      "done": true
+    },
+    {
+      "id": 8,
+      "phase": 3,
+      "description": "Run pnpm install from root to generate unified lockfile and resolve all workspace:* links. This MUST happen before Phase 4 tasks can build.",
+      "steps": [
+        "Delete all per-service pnpm-lock.yaml files if any remain: apps/web/, apps/api/, apps/agent/",
+        "Delete all per-service node_modules: apps/web/node_modules, apps/api/node_modules, apps/agent/node_modules, mastra/node_modules, packages/db/node_modules, packages/shared/node_modules",
+        "Run `pnpm install` from monorepo root — generates single root pnpm-lock.yaml, links workspace packages",
+        "Run `pnpm build --filter=@siestai/tsconfig --filter=@siestai/db --filter=@siestai/shared` — build packages first so apps can resolve imports",
+        "Verify workspace resolution: `pnpm ls --filter=@siestai/api --depth=0` should show @siestai/db and @siestai/shared as workspace links"
+      ],
+      "files": [
+        "pnpm-lock.yaml"
+      ],
+      "verify": "pnpm ls --filter=@siestai/api --depth=0 2>&1 | grep @siestai/db",
+      "done": true
+    },
+    {
+      "id": 9,
+      "phase": 4,
+      "description": "Replace raw SQL in apps/api AgentsService with Drizzle queries from @siestai/db — type-safe database access with the same behavior.",
+      "steps": [
+        "In `apps/api/src/agents/agents.service.ts`: remove Pool import and this.pool creation from onModuleInit()",
+        "Import db client and schema from @siestai/db: `import { db, agents, eq, and, or, ilike, desc, sql } from '@siestai/db'`",
+        "Rewrite `listAgents()`: db.select().from(agents).where(and(...conditions)).orderBy(desc(agents.createdAt)). Handle optional userId filter with `or(eq(agents.userId, userId), sql`${agents.userId} IS NULL`)`. Handle ILIKE search with ilike().",
+        "Rewrite `getAgent()`: db.select().from(agents).where(eq(agents.id, id)), throw NotFoundException if empty",
+        "Rewrite `createAgent()`: db.insert(agents).values({name, description, ...}).returning()",
+        "Rewrite `updateAgent()`: db.update(agents).set({...dto, updatedAt: new Date()}).where(and(eq(agents.id, id), or(eq(agents.userId, userId), sql`...IS NULL`))).returning()",
+        "Rewrite `deleteAgent()`: db.delete(agents).where(and(eq(agents.id, id), eq(agents.userId, userId))).returning()"
+      ],
+      "files": [
+        "apps/api/src/agents/agents.service.ts"
+      ],
+      "verify": "cd apps/api && pnpm build",
+      "done": true
+    },
+    {
+      "id": 10,
+      "phase": 4,
+      "description": "Replace raw SQL in ToolsService, AgentFilesService, and auth.ts — migrate all remaining pg.Pool usage to Drizzle.",
+      "steps": [
+        "Update `apps/api/src/tools/tools.service.ts`: remove Pool, import from @siestai/db. Rewrite seedTools() with db.insert(tools).values([...]).onConflictDoNothing(). Rewrite listTools(), getTool(), listAgentTools() (join agentTools with tools), connectTool(), disconnectTool().",
+        "Update `apps/api/src/agents/files/agent-files.service.ts`: remove Pool, import from @siestai/db. Rewrite listFiles(), uploadFile(), deleteFile(), getFile() — all straightforward select/insert/delete on agentFiles table.",
+        "Update `apps/api/src/auth/auth.ts`: replace standalone `new Pool()` with the db client from @siestai/db. Better Auth's drizzle adapter needs the raw drizzle instance — export it from @siestai/db.",
+        "Verify no remaining `new Pool` or `this.pool.query` calls exist anywhere in apps/api/src/ (grep to confirm)"
+      ],
+      "files": [
+        "apps/api/src/tools/tools.service.ts",
+        "apps/api/src/agents/files/agent-files.service.ts",
+        "apps/api/src/auth/auth.ts"
+      ],
+      "verify": "cd apps/api && pnpm build && grep -r 'this.pool.query\\|new Pool' apps/api/src/ --include='*.ts' | wc -l | grep -q '^0$'",
+      "done": true
+    },
+    {
+      "id": 11,
+      "phase": 5,
+      "description": "Replace MastraRegistryService with in-process Mastra agent runtime. This touches 5 files that inject the old service.",
+      "steps": [
+        "Delete `apps/api/src/mastra/mastra-registry.service.ts`",
+        "Create `apps/api/src/mastra/mastra.service.ts` — NestJS @Injectable() that wraps Mastra instance from instance.ts. Methods: registerAgent(record), unregisterAgent(id), getAgent(id), listRegistered(). Uses in-process createRuntimeAgent() from runtime.ts instead of HTTP calls.",
+        "Update `apps/api/src/mastra/mastra.module.ts` — replace MastraRegistryService with MastraService in providers and exports",
+        "Update `apps/api/src/agents/agents.service.ts` — change injection from MastraRegistryService → MastraService (same method signatures: registerAgent, unregisterAgent)",
+        "Update `apps/api/src/agents/agents.controller.ts` — change injection from MastraRegistryService → MastraService (uses listRegistered())",
+        "Update `apps/api/src/agents/preview/agent-preview.service.ts` — change injection from MastraRegistryService → MastraService (uses getAgent())",
+        "Update `apps/api/src/app.module.ts` — verify MastraModule imports are correct"
+      ],
+      "files": [
+        "apps/api/src/mastra/mastra.service.ts",
+        "apps/api/src/mastra/mastra.module.ts",
+        "apps/api/src/agents/agents.service.ts",
+        "apps/api/src/agents/agents.controller.ts",
+        "apps/api/src/agents/preview/agent-preview.service.ts",
+        "apps/api/src/app.module.ts"
+      ],
+      "verify": "cd apps/api && pnpm build && grep -r 'MastraRegistryService' apps/api/src/ --include='*.ts' | wc -l | grep -q '^0$'",
+      "done": true
+    },
+    {
+      "id": 12,
+      "phase": 6,
+      "description": "Move Docker and deploy configs — consolidate Dockerfiles into deploy/, update build contexts for monorepo workspace structure.",
+      "steps": [
+        "Create `deploy/docker/` directories",
+        "Move `docker-compose.dev.yml` → `deploy/docker-compose.dev.yml`",
+        "Move `docker-compose.staging.yml` → `deploy/docker-compose.staging.yml`",
+        "Update staging compose: remove mastra service entirely, change remaining service build contexts to `context: ..` (monorepo root), update dockerfile paths to `deploy/docker/Dockerfile.{service}`",
+        "Create `deploy/docker/Dockerfile.web` — multi-stage: COPY root workspace files (package.json, pnpm-workspace.yaml, pnpm-lock.yaml, .npmrc), COPY packages/ + apps/web/, RUN pnpm install --frozen-lockfile --filter=@siestai/web..., RUN pnpm --filter=@siestai/web build, standalone output",
+        "Create `deploy/docker/Dockerfile.api` — multi-stage: COPY workspace files + packages/ + apps/api/, pnpm install --filter=@siestai/api..., nest build",
+        "Create `deploy/docker/Dockerfile.agent` — multi-stage: COPY workspace files + apps/agent/, pnpm install --filter=@siestai/agent..., tsc",
+        "Delete old Dockerfiles if they exist: ui-web/Dockerfile, backend/Dockerfile, mastra/Dockerfile, agent/Dockerfile"
+      ],
+      "files": [
+        "deploy/docker-compose.dev.yml",
+        "deploy/docker-compose.staging.yml",
+        "deploy/docker/Dockerfile.web",
+        "deploy/docker/Dockerfile.api",
+        "deploy/docker/Dockerfile.agent"
+      ],
+      "verify": "ls deploy/docker/ && cat deploy/docker-compose.staging.yml | grep -v mastra",
+      "done": true
+    },
+    {
+      "id": 13,
+      "phase": 6,
+      "description": "Delete the mastra/ service directory entirely — all useful code has been absorbed into packages/db and apps/api.",
+      "steps": [
+        "Verify packages/db has all schema files from mastra/src/db/schema.ts (split into auth.ts, agents.ts, files.ts, tools.ts)",
+        "Verify packages/db/drizzle/ has all 3 migration SQL files + meta/ with _journal.json and 3 snapshots",
+        "Verify packages/db has the seed script",
+        "Verify apps/api/src/mastra/ has runtime.ts and instance.ts",
+        "git rm -r `mastra/` directory entirely",
+        "Update .env.staging.example — remove MASTRA_URL"
+      ],
+      "files": [],
+      "verify": "test ! -d mastra && echo 'mastra/ deleted successfully'",
+      "done": true
+    },
+    {
+      "id": 14,
+      "phase": 6,
+      "description": "Delete the Makefile and replace with turbo-powered root scripts — update AGENTS.md and CLAUDE.md to reflect new structure.",
+      "steps": [
+        "Delete `Makefile`",
+        "Verify root package.json scripts cover all Makefile targets: dev, dev:web (--filter=@siestai/web), dev:api (--filter=@siestai/api), dev:agent (--filter=@siestai/agent), dev:db (scripts/dev-db.sh), build, test, db:migrate (turbo run db:migrate), db:seed, db:setup (db:migrate + db:seed), clean",
+        "Create `scripts/dev-db.sh` — starts docker compose from deploy/: `docker compose -f deploy/docker-compose.dev.yml up -d`",
+        "Update `AGENTS.md` — new repo structure diagram (apps/ + packages/), remove mastra service section, update local dev commands from make → pnpm, update architecture diagram (no more mastra :4111), update Database section (migrations now in packages/db)",
+        "Update `CLAUDE.md` if it references Makefile or mastra service directly"
+      ],
+      "files": [
+        "package.json",
+        "scripts/dev-db.sh",
+        "AGENTS.md",
+        "CLAUDE.md"
+      ],
+      "verify": "test ! -f Makefile && cat package.json | grep turbo",
+      "done": true
+    },
+    {
+      "id": 15,
+      "phase": 7,
+      "description": "Full monorepo build and test verification — confirm everything works end-to-end after reorg.",
+      "steps": [
+        "Run `pnpm install` from root (should be clean, no warnings)",
+        "Run `pnpm build` (turbo run build) — verify build order: tsconfig → db + shared → web + api + agent",
+        "Run `pnpm test` — verify existing tests in apps/web and apps/api pass",
+        "Start dev database: `./scripts/dev-db.sh`",
+        "Run `pnpm db:migrate` — verify Drizzle migrations run from packages/db against local postgres",
+        "Run `pnpm db:seed` — verify seed script inserts 4 default agents",
+        "Run `pnpm dev` — verify web (:3000) and api (:4200) start successfully",
+        "Verify no remaining references to old paths: grep for 'ui-web/', 'backend/', 'mastra/' in non-config .ts files"
+      ],
+      "files": [],
+      "verify": "pnpm build && pnpm test",
+      "done": true
+    },
+    {
+      "id": 16,
+      "phase": 7,
+      "description": "Clean up stale files — consolidate env configs, update gitignore, remove dead references.",
+      "steps": [
+        "Consolidate env files: create single `.env.example` at root with all vars grouped by service (DATABASE_URL, LIVEKIT_*, BETTER_AUTH_*, GOOGLE_*, OPENAI_*, ARENA_INVITE_SECRET, COOKIE_DOMAIN, FRONTEND_URL). Delete per-service .env.example files.",
+        "Update `.gitignore` — add: .turbo, dist/ (all packages), .next (apps/web), apps/*/node_modules, packages/*/node_modules. Remove old paths if any.",
+        "Search for stale imports: grep -r 'from.*../../mastra' apps/ or 'from.*../../../backend' etc. Fix any found.",
+        "Remove dead .env.claude references to mastra service",
+        "Final `pnpm dev` smoke test — starts cleanly with no warnings"
+      ],
+      "files": [
+        ".env.example",
+        ".gitignore"
+      ],
+      "verify": "pnpm build && grep -rn 'mastra/' apps/ packages/ --include='*.ts' | grep -v node_modules | grep -v '@mastra' | grep -v '.mastra' | wc -l",
+      "done": true
+    }
+  ]
+}

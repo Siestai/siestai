@@ -1,9 +1,13 @@
-.agents/
-.terminal-logs/
-screenshots/
-designs/
-.DS_Store
+# Dependencies
 node_modules/
+
+# Build outputs
+dist/
+.next/
+.turbo/
+
+# Mastra build output
+.mastra/
 
 # Environment files
 .env
@@ -11,5 +15,14 @@ node_modules/
 *.env.local
 .env.claude
 
-# Mastra build output
-.mastra/
+# OS files
+.DS_Store
+
+# IDE / misc
+.agents/
+.terminal-logs/
+screenshots/
+designs/
+
+# Coverage
+coverage/

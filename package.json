@@ -1,0 +1,25 @@
+{
+  "name": "@siestai/root",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.18.3",
+  "scripts": {
+    "dev": "turbo run dev",
+    "dev:web": "turbo run dev --filter=@siestai/web",
+    "dev:api": "turbo run dev --filter=@siestai/api",
+    "dev:agent": "turbo run dev --filter=@siestai/agent",
+    "dev:db": "./scripts/dev-db.sh",
+    "stop:db": "docker compose -f deploy/docker-compose.dev.yml down",
+    "db:reset": "docker compose -f deploy/docker-compose.dev.yml down -v && pnpm dev:db && pnpm db:setup",
+    "build": "turbo run build",
+    "test": "turbo run test",
+    "lint": "turbo run lint",
+    "db:migrate": "turbo run db:migrate",
+    "db:seed": "turbo run db:seed",
+    "db:setup": "pnpm db:migrate && pnpm db:seed",
+    "clean": "turbo run clean"
+  },
+  "devDependencies": {
+    "turbo": "^2"
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "name": "@siestai/shared",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc"
+  },
+  "devDependencies": {
+    "@siestai/tsconfig": "workspace:*",
+    "typescript": "^5.8.3"
+  }
+}

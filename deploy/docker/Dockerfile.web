@@ -1,0 +1,29 @@
+FROM node:22-alpine AS build
+WORKDIR /app
+RUN corepack enable && corepack prepare pnpm@latest --activate
+
+# Copy workspace config
+COPY package.json pnpm-workspace.yaml pnpm-lock.yaml .npmrc ./
+
+# Copy workspace packages and the web app
+COPY packages/ ./packages/
+COPY apps/web/ ./apps/web/
+
+# Install deps for web and its workspace dependencies
+RUN pnpm install --frozen-lockfile --filter=@siestai/web...
+
+# Build packages first, then the web app
+RUN pnpm --filter=@siestai/tsconfig build 2>/dev/null; true
+RUN pnpm --filter=@siestai/shared build
+ARG NEXT_PUBLIC_API_URL
+ARG NEXT_PUBLIC_LIVEKIT_URL
+RUN pnpm --filter=@siestai/web build
+
+FROM node:22-alpine
+WORKDIR /app
+COPY --from=build /app/apps/web/.next/standalone ./
+COPY --from=build /app/apps/web/.next/static ./apps/web/.next/static
+ENV HOSTNAME="0.0.0.0"
+ENV PORT=3000
+EXPOSE 3000
+CMD ["node", "apps/web/server.js"]
