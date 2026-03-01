@@ -43,6 +43,7 @@ export function useConversationTranscript(maxMessages: number = 100) {
           text,
           isFinal: true,
           timestamp: Date.now(),
+          source: "livekit",
         });
         changed = true;
       }
@@ -83,6 +84,7 @@ export function useConversationTranscript(maxMessages: number = 100) {
           text,
           isFinal: segment.final,
           timestamp: segment.firstReceivedTime ?? Date.now(),
+          source: "livekit",
         });
         changed = true;
       }
