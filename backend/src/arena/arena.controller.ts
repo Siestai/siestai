@@ -68,6 +68,8 @@ export class ArenaController {
       dto.platform,
       dto.model,
     );
+    // Notify WS clients (host) so the waiting room UI updates
+    this.arenaGateway.broadcastParticipantJoined(sessionId, participant);
     return {
       sessionId,
       wsUrl: `/arena/ws?token=${dto.token}`,

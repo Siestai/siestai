@@ -80,10 +80,23 @@ export class ArenaGateway
     let participant: ArenaParticipant | undefined;
 
     if (payload.role === 'agent') {
-      participant = this.arenaService.addExternalParticipant(
-        payload.sessionId,
-        `Agent-${Date.now()}`,
+      // Try to find an existing participant from REST join (status: connected, no WS yet)
+      const existing = session.participants.find(
+        (p) =>
+          p.type === 'external_agent' &&
+          p.status === 'connected' &&
+          !Array.from(this.clients.values()).some(
+            (c) => c.participantId === p.id,
+          ),
       );
+      if (existing) {
+        participant = existing;
+      } else {
+        participant = this.arenaService.addExternalParticipant(
+          payload.sessionId,
+          `Agent-${Date.now()}`,
+        );
+      }
       info.participantId = participant.id;
     }
 
@@ -230,6 +243,17 @@ export class ArenaGateway
       speaker,
       text,
       timestamp,
+    });
+  }
+
+  broadcastParticipantJoined(
+    sessionId: string,
+    participant: ArenaParticipant,
+  ): void {
+    this.broadcastToSession(sessionId, {
+      type: 'system',
+      event: 'participant_joined',
+      participant,
     });
   }
 
