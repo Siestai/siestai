@@ -1,4 +1,5 @@
 import { cli, defineAgent, log, ServerOptions, voice } from '@livekit/agents';
+import { Room, RoomEvent } from '@livekit/rtc-node';
 import { VAD } from '@livekit/agents-plugin-silero';
 import { LLM as OpenAILLM, STT as OpenAISTT, TTS as OpenAITTS } from '@livekit/agents-plugin-openai';
 import { turnDetector } from '@livekit/agents-plugin-livekit';
@@ -68,6 +69,119 @@ function buildCloudTTSInstructions(
 }
 
 const FOLLOW_UP_TIMEOUT_MS = 5000;
+
+/**
+ * Post an assistant transcript to the backend so it can be broadcast to WS clients.
+ * Failures are logged and swallowed — never disrupts voice flow.
+ */
+async function postTranscript(
+  backendUrl: string,
+  sessionId: string,
+  speaker: string,
+  text: string,
+): Promise<void> {
+  try {
+    const res = await fetch(`${backendUrl}/arena/sessions/${sessionId}/transcript`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ speaker, text, timestamp: Date.now() }),
+    });
+    if (!res.ok) {
+      log().warn(
+        { status: res.status, sessionId },
+        'Transcript POST returned non-OK status',
+      );
+    }
+  } catch (err) {
+    log().warn(
+      { error: err instanceof Error ? err.message : String(err), sessionId },
+      'Failed to post transcript to backend — continuing',
+    );
+  }
+}
+
+/**
+ * Subscribe to assistant ConversationItemAdded events and POST transcripts
+ * to the backend for bridging to WS clients.
+ */
+function setupTranscriptPosting(
+  session: voice.AgentSession,
+  backendUrl: string,
+  sessionId: string,
+): void {
+  const speakerTagRegex = /^\[([^\]]+)\]:\s*/;
+
+  session.on(voice.AgentSessionEventTypes.ConversationItemAdded, (ev) => {
+    if (ev.item.role !== 'assistant') return;
+
+    const text = ev.item.textContent ?? '';
+    if (!text || text.includes('[DONE]')) return;
+
+    // Parse speaker from [Name]: text format
+    const match = text.match(speakerTagRegex);
+    const speaker = match ? match[1] : 'Agent';
+    const cleanText = match ? text.slice(match[0].length) : text;
+
+    // Fire-and-forget — never await in an event handler
+    postTranscript(backendUrl, sessionId, speaker, cleanText);
+  });
+}
+
+/**
+ * Listen for LiveKit data channel messages from external agents and inject
+ * them into the LLM conversation. Includes a 1-second cooldown to avoid
+ * flooding the model with rapid-fire external messages.
+ */
+function setupDataChannelListener(
+  room: Room,
+  session: voice.AgentSession,
+): void {
+  let lastInjectionTime = 0;
+  const COOLDOWN_MS = 1000;
+
+  room.on(RoomEvent.DataReceived, (payload, _participant, _kind, topic) => {
+    if (topic !== 'external-agent-msg') return;
+
+    let msg: { type?: string; speaker?: string; text?: string };
+    try {
+      const raw = new TextDecoder().decode(payload);
+      msg = JSON.parse(raw);
+    } catch {
+      log().debug('Ignoring unparseable data channel message');
+      return;
+    }
+
+    if (msg.type !== 'external_agent_message' || !msg.speaker || !msg.text) {
+      return;
+    }
+
+    const now = Date.now();
+    if (now - lastInjectionTime < COOLDOWN_MS) {
+      log().debug(
+        { speaker: msg.speaker },
+        'External agent message throttled by cooldown',
+      );
+      return;
+    }
+    lastInjectionTime = now;
+
+    log().debug(
+      { speaker: msg.speaker, textLength: msg.text.length },
+      'Injecting external agent message into conversation',
+    );
+
+    try {
+      session.generateReply({
+        userInput: `[External agent ${msg.speaker} says]: ${msg.text}`,
+      });
+    } catch (err) {
+      log().warn(
+        { error: err instanceof Error ? err.message : String(err), speaker: msg.speaker },
+        'Failed to inject external agent message',
+      );
+    }
+  });
+}
 
 interface AgentOnlyState {
   windingDown: boolean;
@@ -470,6 +584,21 @@ export default defineAgent({
       : undefined;
 
     setupFollowUpTurns(session, isAgentOnly, agentOnlyState);
+
+    // Bridge: post assistant transcripts to backend for WS clients (LiveKit → WS)
+    if (arenaMetadata.sessionId && arenaMetadata.backendUrl) {
+      setupTranscriptPosting(session, arenaMetadata.backendUrl, arenaMetadata.sessionId);
+      logger.info(
+        { sessionId: arenaMetadata.sessionId, backendUrl: arenaMetadata.backendUrl },
+        'Transcript posting bridge enabled',
+      );
+    } else {
+      logger.warn('Missing sessionId or backendUrl in metadata — transcript posting disabled');
+    }
+
+    // Bridge: listen for external agent messages via data channel (WS → LiveKit)
+    setupDataChannelListener(ctx.room, session);
+    logger.info('Data channel listener for external agents enabled');
 
     // Agent-only mode: wait for participant then kick off conversation
     if (isAgentOnly) {

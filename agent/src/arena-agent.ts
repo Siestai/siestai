@@ -11,6 +11,8 @@ export interface ArenaMetadata {
   mode: string;
   topic?: string;
   participationMode: string;
+  sessionId?: string;
+  backendUrl?: string;
 }
 
 /**
