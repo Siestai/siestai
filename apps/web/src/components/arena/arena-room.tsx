@@ -246,13 +246,15 @@ export function ArenaRoom({
       const wsSpeaker = wsMatch ? wsMatch[1] : "";
       const wsContent = wsMatch ? wsMsg.text.slice(wsMatch[0].length) : wsMsg.text;
 
-      // Check for duplicates: same speaker + similar text within time window
+      // Check for duplicates: similar text within time window
       const isDuplicate = livekitMessages.some((lkMsg) => {
         if (Math.abs(lkMsg.timestamp - wsMsg.timestamp) > DEDUP_WINDOW_MS) return false;
         const lkMatch = lkMsg.text.match(SPEAKER_REGEX);
         const lkSpeaker = lkMatch ? lkMatch[1] : "";
         const lkContent = lkMatch ? lkMsg.text.slice(lkMatch[0].length) : lkMsg.text;
-        if (lkSpeaker !== wsSpeaker) return false;
+        // Only compare speakers when both sources have a speaker tag;
+        // LiveKit transcriptions from MultiVoiceTTS strip the [Speaker]: prefix
+        if (lkSpeaker && wsSpeaker && lkSpeaker !== wsSpeaker) return false;
         // starts-with match in either direction
         return lkContent.startsWith(wsContent) || wsContent.startsWith(lkContent);
       });
