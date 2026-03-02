@@ -16,7 +16,7 @@ interface ExtractedBrief {
   nextSessionQuestions: string[];
 }
 
-const EXTRACTION_MODEL = 'claude-haiku-4-5-20251001';
+const EXTRACTION_MODEL = 'claude-haiku-4-5';
 
 @Injectable()
 export class MemoryExtractionService {
