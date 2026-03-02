@@ -33,6 +33,10 @@ export class ToolRegistryService {
     const agentTools =
       await this.toolsService.getAgentToolsWithDefinitions(agentId);
 
+    this.logger.log(
+      `Agent ${agentId} has ${agentTools.length} connected tools: ${JSON.stringify(agentTools.map((t) => ({ slug: t.slug, toolId: t.toolId })))}`,
+    );
+
     const toolMap: ToolsInput = {};
 
     for (const at of agentTools) {
@@ -137,6 +141,9 @@ export class ToolRegistryService {
         path: z.string().optional().describe('File path (for get_file)'),
       }),
       execute: async (inputData) => {
+        registry.logger.log(
+          `GitHub tool execute called: action=${inputData.action}, userId=${userId}`,
+        );
         return registry.executeToolAction(
           'github',
           inputData.action,

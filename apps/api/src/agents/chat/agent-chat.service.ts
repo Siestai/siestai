@@ -30,6 +30,9 @@ export class AgentChatService {
     let tools = {};
     try {
       tools = await this.toolRegistry.buildToolsForAgent(agentId, userId);
+      this.logger.log(
+        `Built ${Object.keys(tools).length} tools for agent ${agentId}: [${Object.keys(tools).join(', ')}]`,
+      );
     } catch (err) {
       this.logger.warn(
         `Failed to build tools for agent ${agentId}: ${err}`,

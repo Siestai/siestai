@@ -32,6 +32,28 @@ export const TOOL_SLUGS = {
 
 export type ToolSlug = (typeof TOOL_SLUGS)[keyof typeof TOOL_SLUGS];
 
+export const TOOL_CAPABILITIES: Record<string, string[]> = {
+  [TOOL_SLUGS.GITHUB]: [
+    'Search repositories',
+    'List and create issues',
+    'Read file contents',
+    'List pull requests',
+    'Access user profile',
+  ],
+  [TOOL_SLUGS.GMAIL]: [
+    'Read emails',
+    'Send emails',
+    'Search inbox',
+    'Manage labels',
+    'Create drafts',
+  ],
+  [TOOL_SLUGS.WEB_SEARCH]: [
+    'Search the web',
+    'Fetch page content',
+    'Summarize search results',
+  ],
+} as const;
+
 export interface AgentTool {
   id: string;
   agentId: string;
