@@ -1,15 +1,15 @@
 import { Injectable, Logger } from '@nestjs/common';
-import {
-  streamText,
-  stepCountIs,
-  convertToModelMessages,
-  type UIMessage,
-  type StreamTextResult,
-} from 'ai';
-import { createAnthropic } from '@ai-sdk/anthropic';
+import type { UIMessage } from 'ai';
+import type { MastraModelOutput } from '@mastra/core/stream';
 import { AgentsService } from '../agents.service';
 import { ToolRegistryService } from '../../tools/tool-registry.service';
-import { toAISDKTools } from './tool-adapter';
+import { MastraService } from '../../mastra/mastra.service';
+import { createRuntimeAgent } from '../../mastra/runtime';
+
+export interface ChatStreamResult {
+  output: MastraModelOutput<any>;
+  ephemeralKey: string;
+}
 
 @Injectable()
 export class AgentChatService {
@@ -18,41 +18,46 @@ export class AgentChatService {
   constructor(
     private readonly agentsService: AgentsService,
     private readonly toolRegistry: ToolRegistryService,
+    private readonly mastraService: MastraService,
   ) {}
 
   async streamChat(
     agentId: string,
     messages: UIMessage[],
     userId: string,
-  ): Promise<StreamTextResult<any, any>> {
-    const agent = await this.agentsService.getAgent(agentId);
+  ): Promise<ChatStreamResult> {
+    const agentRecord = await this.agentsService.getAgent(agentId);
 
     let tools = {};
     try {
-      const mastraTools = await this.toolRegistry.buildToolsForAgent(
-        agentId,
-        userId,
-      );
-      tools = toAISDKTools(mastraTools);
+      tools = await this.toolRegistry.buildToolsForAgent(agentId, userId);
     } catch (err) {
       this.logger.warn(
         `Failed to build tools for agent ${agentId}: ${err}`,
       );
     }
 
-    const modelId = (agent.llmModel || 'anthropic/claude-sonnet-4-6').replace(
-      'anthropic/',
-      '',
-    );
-    const anthropic = createAnthropic();
-    const model = anthropic(modelId);
+    const agent = createRuntimeAgent(agentRecord as any, tools);
+    const ephemeralKey = this.mastraService.registerEphemeralAgent(agent);
 
-    return streamText({
-      model,
-      system: agent.instructions,
-      messages: await convertToModelMessages(messages),
-      tools,
-      stopWhen: stepCountIs(5),
+    const conversationId = `${userId}:${agentId}`;
+
+    const output = await agent.stream(messages as any, {
+      maxSteps: 5,
+      tracingOptions: {
+        metadata: {
+          userId,
+          agentId,
+          conversationId,
+        },
+        tags: [`user:${userId}`, `agent:${agentId}`],
+      },
     });
+
+    return { output, ephemeralKey };
+  }
+
+  cleanupEphemeral(key: string): void {
+    this.mastraService.unregisterEphemeralAgent(key);
   }
 }

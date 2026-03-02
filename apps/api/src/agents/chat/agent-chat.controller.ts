@@ -1,6 +1,8 @@
 import { Body, Controller, Param, Post, Res } from '@nestjs/common';
 import { Session, type UserSession } from '@thallesp/nestjs-better-auth';
 import type { Response } from 'express';
+import { createUIMessageStream, pipeUIMessageStreamToResponse } from 'ai';
+import { toAISdkStream } from '@mastra/ai-sdk';
 import { AgentChatService } from './agent-chat.service';
 import { AgentChatDto } from './agent-chat.dto';
 
@@ -15,12 +17,25 @@ export class AgentChatController {
     @Body() dto: AgentChatDto,
     @Res() res: Response,
   ) {
-    const result = await this.chatService.streamChat(
+    const { output, ephemeralKey } = await this.chatService.streamChat(
       id,
       dto.messages,
       session.user.id,
     );
 
-    result.pipeUIMessageStreamToResponse(res);
+    const uiStream = createUIMessageStream({
+      originalMessages: dto.messages,
+      execute: async ({ writer }) => {
+        try {
+          for await (const part of toAISdkStream(output, { from: 'agent' })) {
+            await writer.write(part);
+          }
+        } finally {
+          this.chatService.cleanupEphemeral(ephemeralKey);
+        }
+      },
+    });
+
+    pipeUIMessageStreamToResponse({ response: res, stream: uiStream });
   }
 }
