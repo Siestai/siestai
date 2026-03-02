@@ -3,6 +3,7 @@ import type {
   ArenaInvite,
   ArenaParticipant,
   ArenaSession,
+  ArenaSessionBrief,
   ParticipationMode,
 } from "./types";
 import { API_URL } from "./livekit";
@@ -89,6 +90,28 @@ export async function joinArena(
   }
 
   return response.json() as Promise<JoinArenaResponse>;
+}
+
+export async function getArenaSessionBrief(
+  sessionId: string,
+): Promise<ArenaSessionBrief | null> {
+  const response = await fetch(`${API_URL}/arena/sessions/${sessionId}/brief`, {
+    credentials: "include",
+  });
+
+  // 202 means extraction is still processing
+  if (response.status === 202) {
+    return null;
+  }
+
+  if (!response.ok) {
+    const errorText = await response.text().catch(() => "Unknown error");
+    throw new Error(
+      `Failed to fetch session brief: ${response.status} ${errorText}`,
+    );
+  }
+
+  return response.json() as Promise<ArenaSessionBrief>;
 }
 
 export function buildWsUrl(hostToken: string): string {

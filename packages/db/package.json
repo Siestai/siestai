@@ -11,8 +11,7 @@
     "build": "tsc",
     "generate": "drizzle-kit generate",
     "migrate": "drizzle-kit migrate",
-    "seed": "tsx src/seed.ts",
-    "db:setup": "pnpm migrate && pnpm seed"
+    "db:setup": "pnpm migrate"
   },
   "dependencies": {
     "drizzle-orm": "^0.39.3",

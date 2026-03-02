@@ -1,8 +1,9 @@
 import { betterAuth } from 'better-auth';
-import { pool } from '@siestai/db';
+import { drizzleAdapter } from 'better-auth/adapters/drizzle';
+import { db } from '@siestai/db';
 
 export const auth = betterAuth({
-  database: pool,
+  database: drizzleAdapter(db, { provider: 'pg' }),
   baseURL: process.env.BETTER_AUTH_URL || 'http://localhost:4200',
   basePath: '/api/auth',
   trustedOrigins: [process.env.FRONTEND_URL || 'http://localhost:3000'],

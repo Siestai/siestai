@@ -77,6 +77,7 @@ export class LivekitService {
 
   async generateArenaToken(
     session: ArenaSession,
+    agentMemories?: Map<string, string>,
   ): Promise<{ token: string; serverUrl: string; roomName: string }> {
     const apiKey = this.configService.get<string>('LIVEKIT_API_KEY');
     const apiSecret = this.configService.get<string>('LIVEKIT_API_SECRET');
@@ -96,7 +97,13 @@ export class LivekitService {
       type: 'arena',
       agents: session.participants
         .filter((p) => p.type === 'native_agent')
-        .map((p) => ({ name: p.name, instructions: p.instructions || '' })),
+        .map((p) => ({
+          name: p.name,
+          instructions: p.instructions || '',
+          ...(agentMemories?.get(p.name) && {
+            memories: agentMemories.get(p.name),
+          }),
+        })),
       mode: session.mode,
       topic: session.topic,
       participationMode: session.participationMode,

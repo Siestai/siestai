@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, Suspense, useRef } from "react";
+import Link from "next/link";
 import {
   Users,
   Bot,
@@ -15,6 +16,7 @@ import {
   Clock,
   Plus,
   Trash2,
+  FileText,
 } from "lucide-react";
 import "@livekit/components-styles";
 import { LiveKitRoom } from "@livekit/components-react";
@@ -58,6 +60,7 @@ function ArenaPageContent() {
   ]);
   const [isCreating, setIsCreating] = useState(false);
   const sessionStartedAt = useRef<number>(0);
+  const [endedSessionId, setEndedSessionId] = useState<string | null>(null);
 
   const arenaSession = useArenaSession();
 
@@ -130,6 +133,7 @@ function ArenaPageContent() {
   };
 
   const handleEndSession = () => {
+    setEndedSessionId(arenaSession.session?.id ?? null);
     arenaSession.endSession();
     setPageState("ended");
   };
@@ -742,10 +746,20 @@ function ArenaPageContent() {
           </div>
         </div>
 
-        <Button onClick={handleNewSession} className="gap-2">
-          <RotateCcw className="h-4 w-4" />
-          New Session
-        </Button>
+        <div className="flex flex-col gap-3 items-center">
+          {endedSessionId && (
+            <Button asChild className="gap-2 w-full">
+              <Link href={`/arena/sessions/${endedSessionId}/brief`}>
+                <FileText className="h-4 w-4" />
+                View Session Brief
+              </Link>
+            </Button>
+          )}
+          <Button onClick={handleNewSession} variant={endedSessionId ? "outline" : "default"} className="gap-2 w-full">
+            <RotateCcw className="h-4 w-4" />
+            New Session
+          </Button>
+        </div>
       </div>
     </div>
   );

@@ -47,6 +47,11 @@ export class AgentsController {
     return this.agentsService.getAgent(id);
   }
 
+  @Get(':id/memories')
+  getAgentMemories(@Param('id') id: string) {
+    return this.agentsService.getAgentMemories(id);
+  }
+
   @Post()
   createAgent(@Session() session: UserSession, @Body() dto: CreateAgentDto) {
     return this.agentsService.createAgent(dto, session.user.id);

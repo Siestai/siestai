@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { db, agents, eq, and, or, ilike, desc, sql } from '@siestai/db';
+import { db, agents, agentMemories, eq, and, or, ilike, desc, sql } from '@siestai/db';
 import { CreateAgentDto } from './dto/create-agent.dto';
 import { UpdateAgentDto } from './dto/update-agent.dto';
 import { ActivityService } from '../activity/activity.service';
@@ -141,5 +141,14 @@ export class AgentsService {
       throw new NotFoundException('Agent not found');
     }
     return { ok: true };
+  }
+
+  async getAgentMemories(agentId: string, limit = 20) {
+    return db
+      .select()
+      .from(agentMemories)
+      .where(eq(agentMemories.agentId, agentId))
+      .orderBy(desc(agentMemories.createdAt))
+      .limit(limit);
   }
 }

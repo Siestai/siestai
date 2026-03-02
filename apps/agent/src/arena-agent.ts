@@ -3,6 +3,7 @@ import { log, voice } from '@livekit/agents';
 export interface ArenaAgentConfig {
   name: string;
   instructions: string;
+  memories?: string;
 }
 
 export interface ArenaMetadata {
@@ -71,7 +72,19 @@ export class ArenaAgent extends voice.Agent {
       );
     }
 
-    // 3. Format rules
+    // 3. Context from previous sessions (if any agent has memories)
+    const agentsWithMemories = metadata.agents.filter((a) => a.memories);
+    if (agentsWithMemories.length > 0) {
+      sections.push('');
+      sections.push('## Context from Previous Sessions');
+      for (const agent of agentsWithMemories) {
+        sections.push(
+          `<memory agent="${agent.name}">${agent.memories}</memory>`,
+        );
+      }
+    }
+
+    // 4. Format rules
     sections.push('');
     sections.push('Format rules:');
     sections.push(
@@ -135,6 +148,16 @@ export class ArenaAgent extends voice.Agent {
         truncatedSections.push(
           `<agent name="${agent.name}">${cleanInstructions}</agent>`,
         );
+      }
+      // Re-add memory section (memories are not truncated — already capped at 500 chars per agent)
+      if (agentsWithMemories.length > 0) {
+        truncatedSections.push('');
+        truncatedSections.push('## Context from Previous Sessions');
+        for (const agent of agentsWithMemories) {
+          truncatedSections.push(
+            `<memory agent="${agent.name}">${agent.memories}</memory>`,
+          );
+        }
       }
       const formatRulesIdx = sections.indexOf('Format rules:');
       if (formatRulesIdx !== -1) {

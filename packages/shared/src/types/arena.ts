@@ -91,3 +91,43 @@ export type ArenaWsClientMessage =
       model?: string;
       instructions?: string;
     };
+
+// --- Arena Memory & Context Engineering types ---
+
+export interface ArenaTranscriptEntry {
+  id: string;
+  sessionId: string;
+  speakerName: string;
+  speakerType: ArenaParticipantType;
+  content: string;
+  source: 'livekit' | 'websocket';
+  timestamp: string;
+}
+
+export type MemoryCategory =
+  | 'decision'
+  | 'position'
+  | 'task'
+  | 'open_question'
+  | 'learning';
+
+export interface AgentMemory {
+  id: string;
+  agentId: string;
+  sessionId: string;
+  category: MemoryCategory;
+  content: string;
+  confidence: 'high' | 'medium' | 'low';
+  createdAt: string;
+  expiresAt?: string;
+}
+
+export interface ArenaSessionBrief {
+  id: string;
+  sessionId: string;
+  decisions: { text: string; confidence: string }[];
+  actionItems: { owner: string; task: string; deadline?: string }[];
+  unresolved: { topic: string; positions: string[] }[];
+  nextSessionQuestions: string[];
+  createdAt: string;
+}

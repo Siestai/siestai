@@ -20,6 +20,10 @@ export {
   type ArenaInvite,
   type ArenaWsServerMessage,
   type ArenaWsClientMessage,
+  type ArenaTranscriptEntry,
+  type MemoryCategory,
+  type AgentMemory,
+  type ArenaSessionBrief,
 } from './types/arena';
 
 export {

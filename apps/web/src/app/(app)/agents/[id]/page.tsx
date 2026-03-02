@@ -19,6 +19,7 @@ import { FilesSection } from "@/components/agents/detail/files-section";
 import { ToolsSection } from "@/components/agents/detail/tools-section";
 import { SkillsSection } from "@/components/agents/detail/skills-section";
 import { SettingsSection } from "@/components/agents/detail/settings-section";
+import { AgentMemories } from "@/components/agents/agent-memories";
 import { api } from "@/lib/api";
 import type { AgentFile } from "@/lib/types";
 
@@ -131,6 +132,9 @@ export default function AgentDetailPage({
           currentInstructions={agent.instructions}
           onApply={(updates) => updateFields(updates)}
         />
+
+        {/* Memory */}
+        <AgentMemories agentId={agent.id} />
 
         {/* Settings + Danger Zone */}
         <SettingsSection agent={agent} onUpdate={updateField} />
