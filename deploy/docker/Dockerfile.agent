@@ -50,9 +50,5 @@ USER appuser
 WORKDIR /app/apps/agent
 RUN pnpm download-files
 
-USER root
-RUN cd /app && pnpm --filter=@siestai/agent prune --prod && chown -R appuser:appuser /app
-USER appuser
-
 ENV NODE_ENV=production
 CMD ["node", "dist/main.js", "start"]
