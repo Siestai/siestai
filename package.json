@@ -15,7 +15,7 @@
     "test": "turbo run test",
     "lint": "turbo run lint",
     "db:migrate": "turbo run db:migrate",
-    "db:setup": "pnpm db:migrate",
+    "db:setup": "pnpm db:migrate && pnpm --filter @siestai/db db:seed",
     "clean": "turbo run clean"
   },
   "devDependencies": {

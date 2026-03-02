@@ -1,0 +1,374 @@
+{
+  "title": "Tools System — GitHub, Gmail, Web Search",
+  "plan": "records/plans/0011-tools-system.md",
+  "tasks": [
+    {
+      "id": 1,
+      "phase": 1,
+      "description": "Add toolCredentials table and expand tools schema to support OAuth metadata and tool type",
+      "steps": [
+        "Edit `packages/db/src/schema/tools.ts`: add `toolCredentials` table with columns: id (UUID PK), toolId (FK→tools, unique — one credential per tool since per-workspace), accessToken (text, encrypted), refreshToken (text, nullable), tokenExpiresAt (timestamp, nullable), scope (text, nullable), createdAt, updatedAt",
+        "Add `type` column to `tools` table: varchar(20) for 'oauth' | 'api_key' | 'builtin', defaulting to 'builtin'",
+        "Add `slug` column to `tools` table: varchar(50) unique, not null — machine identifier (e.g., 'github', 'gmail', 'web_search')",
+        "Add `oauthProvider` column to `tools` table: varchar(50) nullable — identifies the OAuth provider",
+        "Add `requiredScopes` column to `tools` table: jsonb string[] default [] — OAuth scopes needed",
+        "Export new table + types (ToolCredentialRow, NewToolCredential) from `packages/db/src/schema/tools.ts`, `packages/db/src/schema/index.ts`, and `packages/db/src/index.ts`",
+        "Generate migration: `cd packages/db && pnpm drizzle-kit generate`"
+      ],
+      "files": [
+        "packages/db/src/schema/tools.ts",
+        "packages/db/src/schema/index.ts",
+        "packages/db/src/index.ts"
+      ],
+      "verify": "cd /Users/orhanors/Desktop/siestai/packages/db && pnpm build",
+      "done": true
+    },
+    {
+      "id": 2,
+      "phase": 1,
+      "description": "Expand shared Tool types to include OAuth status, tool type, and credential info for frontend consumption",
+      "steps": [
+        "Edit `packages/shared/src/types/tool.ts`: add `slug`, `type` ('oauth'|'api_key'|'builtin'), `oauthProvider`, `requiredScopes` to Tool interface",
+        "Add `ToolWithStatus` interface extending Tool with `connected: boolean` (credential exists and valid)",
+        "Add `ToolCredentialStatus` interface: { connected: boolean, scope?: string, expiresAt?: string }",
+        "Add `TOOL_SLUGS` const: { GITHUB: 'github', GMAIL: 'gmail', WEB_SEARCH: 'web_search' } as const",
+        "Export all new types from `packages/shared/src/types/index.ts`"
+      ],
+      "files": [
+        "packages/shared/src/types/tool.ts",
+        "packages/shared/src/types/index.ts"
+      ],
+      "verify": "cd /Users/orhanors/Desktop/siestai/packages/shared && pnpm build",
+      "done": true
+    },
+    {
+      "id": 3,
+      "phase": 2,
+      "description": "Create seed script and npm command to populate the 3 initial tools in the database",
+      "steps": [
+        "Create `packages/db/src/seed.ts`: import db client + tools table, insert 3 tool rows",
+        "GitHub: { slug: 'github', name: 'GitHub', description: 'Search repositories, list issues, and read file contents from GitHub.', type: 'oauth', icon: 'github', category: 'development', oauthProvider: 'github', requiredScopes: ['repo', 'read:user'] }",
+        "Gmail: { slug: 'gmail', name: 'Gmail', description: 'Send emails via your connected Gmail account.', type: 'oauth', icon: 'mail', category: 'communication', oauthProvider: 'google', requiredScopes: ['https://www.googleapis.com/auth/gmail.send'] }",
+        "Web Search: { slug: 'web_search', name: 'Web Search', description: 'Search the web for real-time information using Tavily.', type: 'api_key', icon: 'search', category: 'research' }",
+        "Use upsert (ON CONFLICT ON slug DO UPDATE) so seed is idempotent",
+        "Add `\"db:seed\": \"tsx src/seed.ts\"` script to `packages/db/package.json`",
+        "Update root `package.json` `db:setup` script from `pnpm db:migrate` to `pnpm db:migrate && pnpm --filter @siestai/db db:seed`"
+      ],
+      "files": [
+        "packages/db/src/seed.ts",
+        "packages/db/package.json",
+        "package.json"
+      ],
+      "verify": "cd /Users/orhanors/Desktop/siestai && pnpm db:setup",
+      "done": true
+    },
+    {
+      "id": 4,
+      "phase": 2,
+      "description": "Add env vars for tool OAuth providers (GitHub OAuth app, Google Tools OAuth, Tavily API key, Agent Tool Secret)",
+      "steps": [
+        "Edit `.env.staging.example`: add GITHUB_TOOLS_CLIENT_ID, GITHUB_TOOLS_CLIENT_SECRET, GOOGLE_TOOLS_CLIENT_ID, GOOGLE_TOOLS_CLIENT_SECRET, TAVILY_API_KEY, AGENT_TOOL_SECRET",
+        "Add comment blocks explaining these are separate from login OAuth: '# Tool OAuth (separate from user login OAuth)'",
+        "Note: Do NOT add validation in app.module.ts that crashes — these are optional until tools are configured"
+      ],
+      "files": [
+        ".env.staging.example"
+      ],
+      "verify": "cat /Users/orhanors/Desktop/siestai/.env.staging.example | grep TAVILY",
+      "done": true
+    },
+    {
+      "id": 5,
+      "phase": 3,
+      "description": "Build OAuthService for handling OAuth flows — authorization URL generation, token exchange, refresh, and encryption",
+      "steps": [
+        "Create `apps/api/src/tools/oauth.service.ts`",
+        "Implement `encrypt(plaintext: string): string` and `decrypt(ciphertext: string): string` using Node crypto aes-256-gcm with BETTER_AUTH_SECRET as key (derive via scrypt or sha256). Store as `iv:authTag:ciphertext` hex string",
+        "Implement `getAuthorizationUrl(toolSlug: string): string` — generates OAuth redirect URL with state param (HMAC-signed toolSlug). Callback URL: `{BACKEND_URL}/tools/oauth/callback`",
+        "Implement `exchangeCode(toolSlug: string, code: string): Promise<{ accessToken, refreshToken?, expiresIn? }>` — exchanges auth code for tokens via POST to token URL",
+        "Implement `refreshToken(toolId: string): Promise<string>` — reads encrypted refresh token from DB, calls token URL, updates DB with new tokens",
+        "Implement `getValidToken(toolSlug: string): Promise<string>` — reads credential, checks expiry, auto-refreshes if needed, returns decrypted access token",
+        "GitHub OAuth: authorize `https://github.com/login/oauth/authorize`, token `https://github.com/login/oauth/access_token` (set Accept: application/json header)",
+        "Google/Gmail OAuth: authorize `https://accounts.google.com/o/oauth2/v2/auth`, token `https://oauth2.googleapis.com/token`, include `access_type=offline&prompt=consent` for refresh token",
+        "Inject ConfigService for GITHUB_TOOLS_CLIENT_ID/SECRET, GOOGLE_TOOLS_CLIENT_ID/SECRET, BETTER_AUTH_SECRET, BACKEND_URL"
+      ],
+      "files": [
+        "apps/api/src/tools/oauth.service.ts"
+      ],
+      "verify": "cd /Users/orhanors/Desktop/siestai/apps/api && pnpm build",
+      "done": true
+    },
+    {
+      "id": 6,
+      "phase": 3,
+      "description": "Extend ToolsController with OAuth endpoints — initiate flow, callback, status, and disconnect",
+      "steps": [
+        "Add `GET /tools/:slug/oauth/connect` — calls oauthService.getAuthorizationUrl(slug), returns 302 redirect to provider",
+        "Add `GET /tools/oauth/callback` (@AllowAnonymous) — reads `code` + `state` query params, validates state HMAC, calls oauthService.exchangeCode(), stores via toolsService.saveToolCredential(), redirects to `{FRONTEND_URL}/tools/callback?connected={slug}`",
+        "Add `GET /tools/:slug/oauth/status` — returns { connected: boolean, scope?: string, expiresAt?: string }",
+        "Add `DELETE /tools/:slug/oauth/disconnect` — calls toolsService.deleteToolCredential(slug)",
+        "Add `POST /tools/web_search/configure` — body: { apiKey: string }, encrypts and saves to toolCredentials as accessToken",
+        "Add `GET /tools/web_search/status` — returns { configured: boolean }",
+        "Register OAuthService in ToolsModule providers"
+      ],
+      "files": [
+        "apps/api/src/tools/tools.controller.ts",
+        "apps/api/src/tools/tools.module.ts"
+      ],
+      "verify": "cd /Users/orhanors/Desktop/siestai/apps/api && pnpm build",
+      "done": true
+    },
+    {
+      "id": 7,
+      "phase": 3,
+      "description": "Extend ToolsService with credential management and tool status queries",
+      "steps": [
+        "Import `toolCredentials` from `@siestai/db` (will be available after task 1 migration)",
+        "Add `getToolBySlug(slug: string)` method — query tools table by slug column",
+        "Add `getToolCredential(toolSlug: string)` — join tools + toolCredentials, return row or null",
+        "Add `saveToolCredential(toolId: string, data: { accessToken, refreshToken?, tokenExpiresAt?, scope? })` — upsert into toolCredentials (ON CONFLICT toolId DO UPDATE)",
+        "Add `deleteToolCredential(toolSlug: string)` — delete from toolCredentials WHERE toolId = (SELECT id FROM tools WHERE slug = toolSlug)",
+        "Add `listToolsWithStatus(): Promise<ToolWithStatus[]>` — left join tools with toolCredentials, return tools with `connected` boolean",
+        "Add `getAgentToolsWithDefinitions(agentId: string)` — join agentTools + tools, return full tool definitions (slug, type, name, description) for all connected tools"
+      ],
+      "files": [
+        "apps/api/src/tools/tools.service.ts"
+      ],
+      "verify": "cd /Users/orhanors/Desktop/siestai/apps/api && pnpm build",
+      "done": true
+    },
+    {
+      "id": 8,
+      "phase": 4,
+      "description": "Build ToolRegistryService — creates Mastra createTool() instances and delegates to executor classes for runtime execution",
+      "steps": [
+        "Create `apps/api/src/tools/tool-registry.service.ts`",
+        "Import `createTool` from `@mastra/core/tools` and `z` from `zod`",
+        "Implement `buildToolsForAgent(agentId: string): Promise<Record<string, Tool>>` — fetches connected tools via ToolsService, builds Mastra tool instances",
+        "For each tool slug, construct a createTool() with appropriate id, description, inputSchema (Zod), and execute function",
+        "Execute functions should delegate to executor classes (created in tasks 15-17). For now, create stub execute functions that throw 'Not implemented' — executors will be wired in phase 7",
+        "Define tool schemas: github_search: z.object({query: z.string(), repo: z.string().optional()}), gmail_send: z.object({to: z.string(), subject: z.string(), body: z.string()}), web_search: z.object({query: z.string(), maxResults: z.number().optional().default(5)})",
+        "Implement `executeToolAction(toolSlug: string, action: string, params: Record<string, unknown>): Promise<unknown>` — used by the /tools/execute proxy endpoint",
+        "Inject OAuthService and ToolsService. Register in ToolsModule providers + exports"
+      ],
+      "files": [
+        "apps/api/src/tools/tool-registry.service.ts",
+        "apps/api/src/tools/tools.module.ts"
+      ],
+      "verify": "cd /Users/orhanors/Desktop/siestai/apps/api && pnpm build",
+      "done": true
+    },
+    {
+      "id": 9,
+      "phase": 4,
+      "description": "Inject tools into Mastra agent preview streaming so agents can call tools during text chat",
+      "steps": [
+        "Edit `apps/api/src/agents/preview/agent-preview.service.ts`: inject ToolRegistryService via constructor",
+        "When dto.agentId is provided, call `toolRegistry.buildToolsForAgent(dto.agentId)` to get tool map",
+        "Pass tools to Agent constructor: `new Agent({ ..., tools: toolMap })` — Mastra AgentConfig accepts `tools?: ToolsInput`",
+        "Edit `apps/api/src/mastra/runtime.ts`: add optional `tools` parameter to `createRuntimeAgent(record, tools?)` and pass to Agent constructor",
+        "Edit `apps/api/src/agents/preview/agent-preview.module.ts`: add `imports: [ToolsModule]` so ToolRegistryService is injectable",
+        "Note: AgentPreviewModule currently has no imports array — add it"
+      ],
+      "files": [
+        "apps/api/src/agents/preview/agent-preview.service.ts",
+        "apps/api/src/agents/preview/agent-preview.module.ts",
+        "apps/api/src/mastra/runtime.ts"
+      ],
+      "verify": "cd /Users/orhanors/Desktop/siestai/apps/api && pnpm build",
+      "done": true
+    },
+    {
+      "id": 10,
+      "phase": 4,
+      "description": "Add tool execution proxy endpoint for voice worker — worker calls backend to execute tools instead of running them directly",
+      "steps": [
+        "Create `apps/api/src/tools/dto/execute-tool.dto.ts`: { toolSlug: string, action: string, params: Record<string, unknown> } with class-validator decorators",
+        "Add `POST /tools/execute` endpoint to ToolsController, mark @AllowAnonymous",
+        "Add a guard: read `X-Agent-Secret` header and compare against ConfigService.get('AGENT_TOOL_SECRET'). Return 403 if mismatch",
+        "Delegate to `toolRegistryService.executeToolAction(dto.toolSlug, dto.action, dto.params)`",
+        "Return `{ result: unknown }` on success, `{ error: string }` on failure (catch and wrap exceptions)",
+        "Add AGENT_TOOL_SECRET to .env.staging.example if not already done in task 4"
+      ],
+      "files": [
+        "apps/api/src/tools/dto/execute-tool.dto.ts",
+        "apps/api/src/tools/tools.controller.ts"
+      ],
+      "verify": "cd /Users/orhanors/Desktop/siestai/apps/api && pnpm build",
+      "done": true
+    },
+    {
+      "id": 11,
+      "phase": 5,
+      "description": "Update arena session start to include tool definitions in room metadata so voice worker knows which tools are available",
+      "steps": [
+        "Edit `apps/api/src/arena/arena.controller.ts` startSession method",
+        "For each native_agent participant with agentId: call `toolsService.getAgentToolsWithDefinitions(p.agentId)` to get connected tool definitions",
+        "Add `tools` field to each agent in room metadata: `{ name, instructions, memories, tools: [{ slug, name, description }] }`",
+        "Add `toolSecret` field to top-level metadata: `configService.get('AGENT_TOOL_SECRET')` — worker uses this to authenticate tool execution calls",
+        "Do NOT include OAuth tokens or API keys in metadata — worker calls /tools/execute proxy endpoint",
+        "Edit `apps/api/src/arena/arena.module.ts`: add ToolsModule to imports array",
+        "Inject ToolsService in ArenaController constructor"
+      ],
+      "files": [
+        "apps/api/src/arena/arena.controller.ts",
+        "apps/api/src/arena/arena.module.ts"
+      ],
+      "verify": "cd /Users/orhanors/Desktop/siestai/apps/api && pnpm build",
+      "done": true
+    },
+    {
+      "id": 12,
+      "phase": 5,
+      "description": "Update voice worker to parse tool definitions from metadata and execute tools via backend HTTP proxy",
+      "steps": [
+        "Edit `apps/agent/src/arena-agent.ts`: add `tools?: { slug: string, name: string, description: string }[]` to ArenaAgentConfig and ArenaMetadata interfaces",
+        "In system prompt construction: if tools are present, add a section: 'You have access to these tools. To use a tool, respond with [TOOL_CALL] toolSlug: {slug}, action: {action}, params: {json}. Wait for the result before continuing.'",
+        "Create `apps/agent/src/tool-executor.ts`: class ToolExecutor with method `execute(slug, action, params)` that POSTs to `{backendUrl}/tools/execute` with `X-Agent-Secret` header. Returns parsed result or error string",
+        "Edit `apps/agent/src/main.ts`: read `toolSecret` from metadata, instantiate ToolExecutor",
+        "In the ConversationItemAdded handler, detect [TOOL_CALL] patterns in assistant output, parse slug/action/params, call ToolExecutor.execute(), inject result back via `session.generateReply({ userInput: '[TOOL_RESULT]: {result}' })`",
+        "Add AGENT_TOOL_SECRET to apps/agent .env.local (for local dev)"
+      ],
+      "files": [
+        "apps/agent/src/arena-agent.ts",
+        "apps/agent/src/main.ts",
+        "apps/agent/src/tool-executor.ts"
+      ],
+      "verify": "cd /Users/orhanors/Desktop/siestai/apps/agent && pnpm build",
+      "done": true
+    },
+    {
+      "id": 13,
+      "phase": 6,
+      "description": "Extend the existing /tools marketplace page with OAuth connection status, connect/disconnect buttons, and API key configuration",
+      "steps": [
+        "Edit `apps/web/src/app/(app)/tools/page.tsx` (file already exists as a basic listing)",
+        "Replace `api.listTools()` call with new `api.listToolsWithStatus()` to get connection status",
+        "Add connection status badge to each tool card: 'Connected' (green dot), 'Not Connected' (gray), 'API Key Required' (yellow)",
+        "For OAuth tools (type='oauth'): add 'Connect' button that window.location to `{API_URL}/tools/{slug}/oauth/connect`, or 'Disconnect' button if already connected",
+        "For API key tools (type='api_key'): add 'Configure' button that opens a dialog/modal to enter the API key, POSTs to `api.configureTool(slug, { apiKey })`",
+        "Add `Github` icon from lucide-react to TOOL_ICON_MAP: `github: Github`",
+        "Add `api.listToolsWithStatus()`, `api.configureTool(slug, config)`, `api.getToolOAuthStatus(slug)`, `api.disconnectToolOAuth(slug)` methods to `apps/web/src/lib/api.ts`",
+        "Note: nav-bar already has /tools link — no nav changes needed"
+      ],
+      "files": [
+        "apps/web/src/app/(app)/tools/page.tsx",
+        "apps/web/src/lib/api.ts"
+      ],
+      "verify": "cd /Users/orhanors/Desktop/siestai/apps/web && pnpm build",
+      "done": true
+    },
+    {
+      "id": 14,
+      "phase": 6,
+      "description": "Update the agent detail tools section to show OAuth status and gate tool connection on credential availability",
+      "steps": [
+        "Edit `apps/web/src/components/agents/detail/tools-section.tsx`",
+        "Replace `api.listTools()` with `api.listToolsWithStatus()` to get ToolWithStatus[] (includes `connected` field)",
+        "Add `Github` icon to local TOOL_ICON_MAP: `github: Github` (import from lucide-react)",
+        "For each tool in the browser grid: show a status indicator — green dot if OAuth/API key configured, orange dot if not",
+        "If tool requires OAuth but credential not connected: replace connect button with 'Setup required' link pointing to `/tools`",
+        "If tool is configured: allow connecting to agent normally via existing `api.connectAgentTool(agentId, toolId)`",
+        "On connected tool pills: add subtle tooltip or subtitle showing tool type (e.g., 'via OAuth')"
+      ],
+      "files": [
+        "apps/web/src/components/agents/detail/tools-section.tsx"
+      ],
+      "verify": "cd /Users/orhanors/Desktop/siestai/apps/web && pnpm build",
+      "done": true
+    },
+    {
+      "id": 15,
+      "phase": 7,
+      "description": "Implement GitHub tool executor — search repos, list issues, read file contents via GitHub REST API",
+      "steps": [
+        "Create `apps/api/src/tools/executors/github.executor.ts`",
+        "Export class GitHubExecutor with method `execute(action: string, params: Record<string, unknown>, accessToken: string): Promise<unknown>`",
+        "Action 'search_repos': GET `https://api.github.com/search/repositories?q={query}` with Bearer token. Return top 5 results: { items: [{ name, full_name, description, url, stars }] }",
+        "Action 'list_issues': GET `https://api.github.com/repos/{owner}/{repo}/issues?state=open&per_page=10`. Return { items: [{ number, title, state, labels, created_at }] }",
+        "Action 'get_file': GET `https://api.github.com/repos/{owner}/{repo}/contents/{path}`. Decode base64 content. Return { content: string, path, sha }",
+        "Sanitize and truncate all responses to max 4000 chars to avoid bloating LLM context",
+        "Wire into ToolRegistryService: replace github stub execute fn with call to GitHubExecutor"
+      ],
+      "files": [
+        "apps/api/src/tools/executors/github.executor.ts",
+        "apps/api/src/tools/tool-registry.service.ts"
+      ],
+      "verify": "cd /Users/orhanors/Desktop/siestai/apps/api && pnpm build",
+      "done": true
+    },
+    {
+      "id": 16,
+      "phase": 7,
+      "description": "Implement Gmail tool executor — send email via Gmail API",
+      "steps": [
+        "Create `apps/api/src/tools/executors/gmail.executor.ts`",
+        "Export class GmailExecutor with method `execute(action: string, params: Record<string, unknown>, accessToken: string): Promise<unknown>`",
+        "Action 'send_email': Build RFC 2822 MIME message from { to, subject, body } — format as 'From: me\\nTo: {to}\\nSubject: {subject}\\n\\n{body}'",
+        "Base64url encode the MIME message (replace +→-, /→_, remove =)",
+        "POST `https://gmail.googleapis.com/gmail/v1/users/me/messages/send` with body `{ raw: encodedMessage }` and Bearer token",
+        "Return { messageId: string, threadId: string } from Gmail API response",
+        "Wire into ToolRegistryService: replace gmail stub execute fn with call to GmailExecutor"
+      ],
+      "files": [
+        "apps/api/src/tools/executors/gmail.executor.ts",
+        "apps/api/src/tools/tool-registry.service.ts"
+      ],
+      "verify": "cd /Users/orhanors/Desktop/siestai/apps/api && pnpm build",
+      "done": true
+    },
+    {
+      "id": 17,
+      "phase": 7,
+      "description": "Implement Web Search tool executor — Tavily search API",
+      "steps": [
+        "Create `apps/api/src/tools/executors/web-search.executor.ts`",
+        "Export class WebSearchExecutor with method `execute(action: string, params: Record<string, unknown>, apiKey: string): Promise<unknown>`",
+        "Action 'search': POST `https://api.tavily.com/search` with body `{ api_key: apiKey, query, max_results: maxResults || 5, search_depth: 'basic' }`",
+        "Return `{ results: [{ title, url, content, score }] }` — truncate content to 500 chars per result",
+        "Wire into ToolRegistryService: replace web_search stub execute fn with call to WebSearchExecutor"
+      ],
+      "files": [
+        "apps/api/src/tools/executors/web-search.executor.ts",
+        "apps/api/src/tools/tool-registry.service.ts"
+      ],
+      "verify": "cd /Users/orhanors/Desktop/siestai/apps/api && pnpm build",
+      "done": true
+    },
+    {
+      "id": 18,
+      "phase": 8,
+      "description": "Add OAuth callback landing page on frontend to handle redirect back from OAuth providers",
+      "steps": [
+        "Create `apps/web/src/app/(app)/tools/callback/page.tsx`",
+        "Read query params: `?connected={slug}` for success, `?error={message}` for failure",
+        "Success: show green CheckCircle2 icon + '{ToolName} connected successfully' + auto-redirect to /tools after 2 seconds using router.push",
+        "Error: show red AlertCircle icon + error message + 'Try again' button linking to /tools",
+        "Keep it simple — use existing shadcn components, match dark theme"
+      ],
+      "files": [
+        "apps/web/src/app/(app)/tools/callback/page.tsx"
+      ],
+      "verify": "cd /Users/orhanors/Desktop/siestai/apps/web && pnpm build",
+      "done": true
+    },
+    {
+      "id": 19,
+      "phase": 8,
+      "description": "End-to-end wiring test — verify tool execution proxy and preview integration work correctly",
+      "steps": [
+        "Create `apps/api/src/tools/__tests__/tool-execution.spec.ts`",
+        "Test 1: ToolRegistryService.executeToolAction('web_search', 'search', { query: 'test' }) with mocked Tavily response → verify structured result",
+        "Test 2: POST /tools/execute with valid AGENT_TOOL_SECRET header → 200 with result. Without header → 403",
+        "Test 3: buildToolsForAgent(agentId) for agent with no connected tools → returns empty object",
+        "Test 4: OAuthService.encrypt/decrypt round-trip → decrypted matches original",
+        "Ensure error handling: missing credential returns clear error message, not a stack trace"
+      ],
+      "files": [
+        "apps/api/src/tools/__tests__/tool-execution.spec.ts"
+      ],
+      "verify": "cd /Users/orhanors/Desktop/siestai/apps/api && npx jest --testPathPatterns='tool-execution'",
+      "done": true
+    }
+  ]
+}
