@@ -84,24 +84,33 @@ export class ArenaGateway
     let participant: ArenaParticipant | undefined;
 
     if (payload.role === 'agent') {
-      // Try to find an existing participant from REST join (status: connected, no WS yet)
-      const existing = session.participants.find(
-        (p) =>
-          p.type === 'external_agent' &&
-          p.status === 'connected' &&
-          !Array.from(this.clients.values()).some(
-            (c) => c.participantId === p.id,
-          ),
-      );
-      if (existing) {
-        participant = existing;
-      } else {
-        participant = await this.arenaService.addExternalParticipant(
-          payload.sessionId,
-          `Agent-${Date.now()}`,
+      try {
+        // Try to find an existing participant from REST join (status: connected, no WS yet)
+        const existing = session.participants.find(
+          (p) =>
+            p.type === 'external_agent' &&
+            p.status === 'connected' &&
+            !Array.from(this.clients.values()).some(
+              (c) => c.participantId === p.id,
+            ),
         );
+        if (existing) {
+          participant = existing;
+        } else {
+          participant = await this.arenaService.addExternalParticipant(
+            payload.sessionId,
+            `Agent-${Date.now()}`,
+          );
+        }
+        info.participantId = participant.id;
+      } catch (err) {
+        this.logger.error(`Failed to register participant: ${err}`);
+        client.send(
+          JSON.stringify({ type: 'error', message: 'Failed to join session' }),
+        );
+        client.close();
+        return;
       }
-      info.participantId = participant.id;
     }
 
     this.clients.set(client, info);
