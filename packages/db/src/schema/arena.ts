@@ -4,6 +4,7 @@ import {
   varchar,
   text,
   timestamp,
+  index,
 } from 'drizzle-orm/pg-core';
 import { user } from './auth';
 import { agents } from './agents';
@@ -32,7 +33,9 @@ export const arenaSessionParticipants = pgTable('arena_session_participants', {
   instructions: text('instructions'),
   color: varchar('color', { length: 7 }).default('#3b82f6'),
   joinedAt: timestamp('joined_at').defaultNow(),
-});
+}, (table) => [
+  index('arena_session_participants_agent_id_idx').on(table.agentId),
+]);
 
 export const arenaTranscripts = pgTable('arena_transcripts', {
   id: uuid('id').primaryKey().defaultRandom(),
