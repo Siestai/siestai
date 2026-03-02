@@ -11,7 +11,7 @@ siestai/                          # Turborepo + pnpm workspace monorepo
 │   ├── api/                      # NestJS 11 API server (:4200)
 │   └── agent/                    # LiveKit voice agent (worker, no port)
 ├── packages/
-│   ├── db/                       # Drizzle schema, migrations, client, seed
+│   ├── db/                       # Drizzle schema, migrations, client
 │   ├── shared/                   # Types, constants, enums (shared between apps)
 │   └── tsconfig/                 # Shared TypeScript config bases
 ├── deploy/
@@ -63,7 +63,7 @@ Browser (:3000)                   NestJS Backend (:4200)
        ▼                                 │
   @siestai/agent                  packages/db
     Agent (1:1 voice)               Schema, migrations, client factory
-    ArenaAgent (multi-persona)      Seed script (4 default agents)
+    ArenaAgent (multi-persona)
     Silero VAD + noise cancel
 ```
 
@@ -88,7 +88,7 @@ Browser (:3000)                   NestJS Backend (:4200)
 - **Google OAuth**: apps/web → `signIn.social({ provider: "google" })` → apps/api `/api/auth/callback/google` → Better Auth creates user/session → redirects to frontend with session cookie
 - **Session check**: Next.js middleware calls apps/api `/api/auth/get-session` on every navigation, forwarding the cookie header. Unauthenticated users redirect to `/auth/login`.
 - **API auth**: All backend routes protected by global `AuthGuard` from `@thallesp/nestjs-better-auth`. Public endpoints marked with `@AllowAnonymous()`.
-- **Agent ownership**: `user_id` FK on agents table. Users see their own agents + unowned (seed) agents. Create sets `user_id`, delete restricted to own agents.
+- **Agent ownership**: `user_id` FK on agents table. Users see their own agents. Create sets `user_id`, delete restricted to own agents.
 
 ## Database
 
@@ -165,15 +165,6 @@ pnpm --filter=@siestai/db generate  # Generate new migration
 | created_at | timestamp | now() |
 | | UNIQUE(agent_id, tool_id) | |
 
-### Seed Agents
-
-| Name | Category | Color | LLM |
-|------|----------|-------|-----|
-| Atlas | technical | #3b82f6 (blue) | anthropic/claude-sonnet-4-6 |
-| Nova | creative | #8b5cf6 (purple) | anthropic/claude-sonnet-4-6 |
-| Sage | conversational | #22c55e (green) | anthropic/claude-sonnet-4-6 |
-| Axiom | debate | #ef4444 (red) | anthropic/claude-sonnet-4-6 |
-
 ## Services
 
 ### apps/web (Next.js :3000)
@@ -221,14 +212,14 @@ pnpm --filter=@siestai/db generate  # Generate new migration
 | Livekit | `POST /livekit/token` | LiveKit token generation + agent dispatch |
 | Arena | `POST /arena/sessions`, `GET /arena/sessions/:id`, `POST /arena/sessions/:id/start`, `POST /arena/join`, `WS /arena/ws` | Session lifecycle + WebSocket relay |
 | AgentFiles | `GET/POST/DELETE /agents/:id/files`, `GET /agents/:id/files/:fileId/download` | Multipart upload (multer, 10MB), file CRUD, disk storage |
-| Tools | `GET /tools`, `GET/POST/DELETE /agents/:id/tools` | Tools marketplace CRUD, agent-tool connections. Seeds 6 placeholder tools on init |
+| Tools | `GET /tools`, `GET/POST/DELETE /agents/:id/tools` | Tools marketplace CRUD, agent-tool connections |
 | Mastra | (internal) | MastraService wraps @mastra/core in-process — registerAgent, unregisterAgent, getAgent, listRegistered |
 | Root | `GET /` | Health check (`@AllowAnonymous`) |
 
 **Key services:**
 - `AgentsService` — Drizzle queries via @siestai/db, user_id filtering
 - `AgentFilesService` — file upload to `uploads/agents/{agentId}/`, disk + DB management
-- `ToolsService` — tools CRUD, agent-tool connections, auto-seeds placeholder tools
+- `ToolsService` — tools CRUD, agent-tool connections
 - `MastraService` — wraps @mastra/core in-process, manages runtime agent registration
 - `ArenaService` — in-memory `Map<string, ArenaSession>`, 1hr expiry
 - `InvitationService` — JWT sign/verify for arena invites (host + agent roles)
@@ -250,7 +241,6 @@ pnpm --filter=@siestai/db generate  # Generate new migration
 - Drizzle ORM schema split into `src/schema/`: auth.ts, agents.ts, files.ts, tools.ts
 - Client factory in `src/client.ts` — shared `db` instance
 - Migrations in `drizzle/` (Drizzle Kit managed)
-- Seed script in `src/seed.ts` — 4 default agents
 - Re-exports drizzle-orm operators (eq, and, or, ilike, desc, sql) for consumers
 
 ### packages/shared (Shared Types)
@@ -280,7 +270,7 @@ Staging is live at **https://staging.siestai.com**. See [`docs/STAGING-SETUP.md`
 # First-time setup
 pnpm install              # Install all workspace dependencies
 pnpm dev:db               # Start PostgreSQL (deploy/docker-compose.dev.yml)
-pnpm db:setup             # Run migrations + seed
+pnpm db:setup             # Run migrations
 
 # Development
 pnpm dev                  # Start all services via turbo (web + api + agent)
@@ -290,7 +280,6 @@ pnpm dev:agent            # Start only LiveKit agent
 
 # Database
 pnpm db:migrate           # Run pending migrations
-pnpm db:seed              # Run seed script
 pnpm db:reset             # Destroy + recreate database
 
 # Build & Test
