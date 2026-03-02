@@ -22,6 +22,7 @@
     "test:external-agent": "NODE_PATH=./node_modules npx tsx ../scripts/test-external-agent.ts"
   },
   "dependencies": {
+    "@ai-sdk/anthropic": "^3.0.50",
     "@anthropic-ai/sdk": "^0.78.0",
     "@livekit/protocol": "^1.44.0",
     "@mastra/core": "^1.8.0",
@@ -36,6 +37,7 @@
     "@siestai/db": "workspace:*",
     "@siestai/shared": "workspace:*",
     "@thallesp/nestjs-better-auth": "^2.4.0",
+    "ai": "^6.0.106",
     "axios": "^1.13.6",
     "better-auth": "^1.4.20",
     "class-transformer": "^0.5.1",

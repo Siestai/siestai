@@ -1,0 +1,174 @@
+{
+  "title": "Agent Chat Preview",
+  "plan": "records/plans/0012-agent-chat-preview.md",
+  "tasks": [
+    {
+      "id": 1,
+      "phase": 1,
+      "description": "Install AI SDK packages on the backend so the chat endpoint can stream in Data Stream Protocol format.",
+      "steps": [
+        "Run `cd apps/api && pnpm add ai @ai-sdk/anthropic`",
+        "Run `pnpm install` from root to sync lockfile",
+        "Verify packages resolve: `cd apps/api && pnpm exec tsc --noEmit --pretty 2>&1 | head -5`"
+      ],
+      "files": ["apps/api/package.json"],
+      "verify": "cd apps/api && pnpm exec tsc --noEmit --pretty 2>&1 | head -5",
+      "done": true
+    },
+    {
+      "id": 2,
+      "phase": 1,
+      "description": "Install AI SDK and React hooks on the frontend for useChat() integration.",
+      "steps": [
+        "Run `cd apps/web && pnpm add ai @ai-sdk/react`",
+        "Run `pnpm install` from root to sync lockfile",
+        "Verify packages resolve: `cd apps/web && pnpm exec tsc --noEmit --pretty 2>&1 | head -5`"
+      ],
+      "files": ["apps/web/package.json"],
+      "verify": "cd apps/web && pnpm exec tsc --noEmit --pretty 2>&1 | head -5",
+      "done": true
+    },
+    {
+      "id": 3,
+      "phase": 2,
+      "description": "Create a Mastra-to-AI-SDK tool adapter so existing ToolRegistryService output works with streamText().",
+      "steps": [
+        "Create `apps/api/src/agents/chat/tool-adapter.ts`",
+        "Import `tool` from `ai` and `ToolsInput` from `@mastra/core/agent`",
+        "Export `toAISDKTools(mastraTools: ToolsInput)` that iterates entries and returns `Record<string, CoreTool>`",
+        "For each Mastra tool: map `description` → `description`, `inputSchema` → `parameters`",
+        "For execute: verify Mastra's execute signature vs AI SDK's `({ ...args }) => ...` — wrap if needed",
+        "Handle empty tools gracefully (return `{}`)"
+      ],
+      "files": ["apps/api/src/agents/chat/tool-adapter.ts"],
+      "verify": "cd apps/api && pnpm exec tsc --noEmit --pretty 2>&1 | head -5",
+      "done": true
+    },
+    {
+      "id": 4,
+      "phase": 2,
+      "description": "Create the chat DTO to validate incoming useChat() message payloads. Must handle forbidNonWhitelisted global pipe.",
+      "steps": [
+        "Create `apps/api/src/agents/chat/agent-chat.dto.ts`",
+        "Define `AgentChatDto` with `@IsArray() messages: any[]` — let AI SDK handle message validation internally",
+        "Do NOT add nested DTO validation on individual messages — useChat sends `{ id, role, content, createdAt }` which would need `@Allow()` on every field",
+        "Optionally add `@Allow()` catch-all or `@IsOptional() data?: any` in case useChat sends extra fields"
+      ],
+      "files": ["apps/api/src/agents/chat/agent-chat.dto.ts"],
+      "verify": "cd apps/api && pnpm exec tsc --noEmit --pretty 2>&1 | head -5",
+      "done": true
+    },
+    {
+      "id": 5,
+      "phase": 3,
+      "description": "Create the chat service that loads agent config from DB, builds tools, resolves the AI SDK model, and streams via streamText().",
+      "steps": [
+        "Create `apps/api/src/agents/chat/agent-chat.service.ts`",
+        "Inject `AgentsService` (from AgentsModule) and `ToolRegistryService` (from ToolsModule)",
+        "Implement `streamChat(agentId: string, messages: CoreMessage[], userId: string)`:",
+        "  1. Load agent via `agentsService.getAgent(agentId)` (throws NotFoundException if missing)",
+        "  2. Build tools via `toolRegistry.buildToolsForAgent(agentId, userId)`, convert with `toAISDKTools()`",
+        "  3. Resolve model: `createAnthropic()((agent.llmModel || 'anthropic/claude-sonnet-4-6').replace('anthropic/', ''))`",
+        "  4. Call `streamText({ model, system: agent.instructions, messages, tools, maxSteps: 5 })`",
+        "  5. Return the streamText result object"
+      ],
+      "files": ["apps/api/src/agents/chat/agent-chat.service.ts"],
+      "verify": "cd apps/api && pnpm exec tsc --noEmit --pretty 2>&1 | head -5",
+      "done": true
+    },
+    {
+      "id": 6,
+      "phase": 3,
+      "description": "Create the chat controller using @Res() and pipeDataStreamToResponse() to stream AI SDK format to the client.",
+      "steps": [
+        "Create `apps/api/src/agents/chat/agent-chat.controller.ts`",
+        "Use `@Controller('agents')` (matches existing pattern with AgentPreviewController)",
+        "Define `@Post(':id/chat')` endpoint",
+        "Inject auth via `@Session() session: UserSession`",
+        "Parse body via `@Body() dto: AgentChatDto`",
+        "Use `@Res() res: Response` to access the Express response directly",
+        "Call `chatService.streamChat(id, dto.messages, session.user.id)`",
+        "Pipe result to response via `result.pipeDataStreamToResponse(res)` from `ai` package",
+        "NOTE: when using `@Res()`, NestJS bypasses its own response handling — this is correct for streaming"
+      ],
+      "files": ["apps/api/src/agents/chat/agent-chat.controller.ts"],
+      "verify": "cd apps/api && pnpm exec tsc --noEmit --pretty 2>&1 | head -5",
+      "done": true
+    },
+    {
+      "id": 7,
+      "phase": 3,
+      "description": "Create the chat NestJS module and register it in app.module.ts alongside AgentPreviewModule.",
+      "steps": [
+        "Create `apps/api/src/agents/chat/agent-chat.module.ts`",
+        "Import `AgentsModule` (provides AgentsService) and `ToolsModule` (provides ToolRegistryService)",
+        "MastraModule and ActivityModule are @Global() — no import needed",
+        "Register controller: `AgentChatController`, provider: `AgentChatService`",
+        "Add `AgentChatModule` to `imports` array in `apps/api/src/app.module.ts` (next to `AgentPreviewModule`)"
+      ],
+      "files": [
+        "apps/api/src/agents/chat/agent-chat.module.ts",
+        "apps/api/src/app.module.ts"
+      ],
+      "verify": "cd apps/api && pnpm exec tsc --noEmit --pretty 2>&1 | head -5",
+      "done": true
+    },
+    {
+      "id": 8,
+      "phase": 4,
+      "description": "Build the ChatMessage component that renders user messages, assistant text, and tool invocations with a minimal agentic feel.",
+      "steps": [
+        "Create `apps/web/src/components/agents/chat/chat-message.tsx`",
+        "Accept a single AI SDK `Message` as prop (import from `@ai-sdk/react`)",
+        "User messages: right-aligned, cyan-tinted bubble (match `step-test-run.tsx` style: `bg-cyan-400/15`)",
+        "Assistant messages: left-aligned, secondary bg, whitespace-pre-wrap for formatting",
+        "Tool invocations (`message.toolInvocations`): render inline between text parts",
+        "  - State 'call': show tool name + args in a compact card with a spinner",
+        "  - State 'result': show tool name + result summary (truncated) with a check icon",
+        "  - Use monospace font for tool names, subtle `border-border` styling",
+        "  - Make tool args/results collapsible via a simple toggle (no heavy accordion — just a chevron)",
+        "Empty assistant message + loading: show bounce dots animation (reuse pattern from step-test-run.tsx)"
+      ],
+      "files": ["apps/web/src/components/agents/chat/chat-message.tsx"],
+      "verify": "cd apps/web && pnpm exec tsc --noEmit --pretty 2>&1 | head -5",
+      "done": true
+    },
+    {
+      "id": 9,
+      "phase": 4,
+      "description": "Build the ChatPanel component wrapping useChat() with cross-origin credential support and auto-scroll.",
+      "steps": [
+        "Create `apps/web/src/components/agents/chat/chat-panel.tsx`",
+        "Props: `agentId: string`, `agentName: string`",
+        "Read API URL: `const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4200'`",
+        "Use `useChat({ api: `${API_URL}/agents/${agentId}/chat`, fetch: (url, init) => fetch(url, { ...init, credentials: 'include' }) })`",
+        "Destructure: `{ messages, input, handleInputChange, handleSubmit, isLoading, error }`",
+        "Render: header strip with agent name + 'Preview' badge, scrollable message list, input bar",
+        "Auto-scroll: useRef on scroll container, useEffect on messages.length to scrollTo bottom",
+        "Input: form with text input + ArrowUp send button, disabled when isLoading",
+        "Error: show subtle error banner if `error` is set",
+        "Empty state: centered text 'Send a message to chat with {agentName}'"
+      ],
+      "files": ["apps/web/src/components/agents/chat/chat-panel.tsx"],
+      "verify": "cd apps/web && pnpm exec tsc --noEmit --pretty 2>&1 | head -5",
+      "done": true
+    },
+    {
+      "id": 10,
+      "phase": 5,
+      "description": "Integrate ChatPanel into the agent detail page as a sticky side panel, replacing the Chat button redirect.",
+      "steps": [
+        "Modify `apps/web/src/app/(app)/agents/[id]/page.tsx`",
+        "Change outer container from `max-w-2xl` single column to a two-column flex/grid layout:",
+        "  - Left column: existing config sections (scrollable, ~60% width, max-w-2xl)",
+        "  - Right column: ChatPanel (sticky, full viewport height, ~40% width, min-w ~380px)",
+        "Replace the 'Chat' button (currently routes to /live) with a 'Voice' button to /live. The chat is now inline.",
+        "Import and render `<ChatPanel agentId={id} agentName={agent.name} />`",
+        "On small screens (<lg), stack vertically or hide chat panel behind a toggle button"
+      ],
+      "files": ["apps/web/src/app/(app)/agents/[id]/page.tsx"],
+      "verify": "cd apps/web && pnpm exec tsc --noEmit --pretty 2>&1 | head -5",
+      "done": true
+    }
+  ]
+}
