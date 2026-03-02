@@ -1,58 +1,8 @@
-import { Injectable, NotFoundException, OnModuleInit } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { db, tools, agentTools, eq, and } from '@siestai/db';
 
-const SEED_TOOLS = [
-  {
-    name: 'Web Search',
-    description: 'Search the web for real-time information and current events.',
-    icon: 'globe',
-    category: 'search',
-  },
-  {
-    name: 'Calculator',
-    description: 'Perform mathematical calculations and unit conversions.',
-    icon: 'calculator',
-    category: 'utility',
-  },
-  {
-    name: 'Code Interpreter',
-    description: 'Execute code snippets in a sandboxed environment.',
-    icon: 'code-2',
-    category: 'developer',
-  },
-  {
-    name: 'Image Generator',
-    description: 'Generate images from text descriptions using AI.',
-    icon: 'image',
-    category: 'creative',
-  },
-  {
-    name: 'Calendar',
-    description: 'Manage calendar events and scheduling.',
-    icon: 'calendar',
-    category: 'productivity',
-  },
-  {
-    name: 'Email',
-    description: 'Send and read emails on behalf of the user.',
-    icon: 'mail',
-    category: 'productivity',
-  },
-];
-
 @Injectable()
-export class ToolsService implements OnModuleInit {
-  async onModuleInit() {
-    await this.seedTools();
-  }
-
-  private async seedTools() {
-    await db
-      .insert(tools)
-      .values(SEED_TOOLS)
-      .onConflictDoNothing({ target: tools.name });
-  }
-
+export class ToolsService {
   async listTools() {
     return db
       .select()

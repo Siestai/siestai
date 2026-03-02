@@ -6,7 +6,7 @@ import {
   integer,
   timestamp,
 } from 'drizzle-orm/pg-core';
-import { agents } from './agents.js';
+import { agents } from './agents';
 
 export const agentFiles = pgTable('agent_files', {
   id: uuid('id').primaryKey().defaultRandom(),

@@ -22,6 +22,13 @@
       "when": 1772323193035,
       "tag": "0002_add_agent_files_and_tools",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1772611200000,
+      "tag": "0003_add_arena_sessions_and_memories",
+      "breakpoints": true
     }
   ]
 }

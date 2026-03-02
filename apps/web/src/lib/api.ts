@@ -10,6 +10,7 @@ import type {
   AgentPreviewRequest,
   ActivityEvent,
   AgentFile,
+  AgentMemory,
   Tool,
   AgentTool,
 } from "./types";
@@ -140,6 +141,11 @@ class ApiClient {
   // Activity
   async getActivity(): Promise<ActivityEvent[]> {
     return this.request<ActivityEvent[]>("/activity");
+  }
+
+  // Agent memories
+  async getAgentMemories(agentId: string): Promise<AgentMemory[]> {
+    return this.request<AgentMemory[]>(`/agents/${agentId}/memories`);
   }
 
   // Resolve agent name

@@ -3,12 +3,13 @@ import {
   OnGatewayConnection,
   OnGatewayDisconnect,
 } from '@nestjs/websockets';
+import { Logger } from '@nestjs/common';
 import { IncomingMessage } from 'http';
 import { WebSocket } from 'ws';
 import { InvitationService, InvitePayload } from './invitation.service';
 import { ArenaService } from './arena.service';
 import { LivekitService } from '../livekit/livekit.service';
-import { ArenaParticipant } from './arena.interfaces';
+import { ArenaParticipant, ArenaSession } from './arena.interfaces';
 
 interface ClientInfo {
   sessionId: string;
@@ -34,6 +35,7 @@ type WsClientPayload = WsClientIdentify | WsClientMessage;
 export class ArenaGateway
   implements OnGatewayConnection, OnGatewayDisconnect
 {
+  private readonly logger = new Logger(ArenaGateway.name);
   private clients = new Map<WebSocket, ClientInfo>();
 
   constructor(
@@ -42,7 +44,10 @@ export class ArenaGateway
     private readonly livekitService: LivekitService,
   ) {}
 
-  handleConnection(client: WebSocket, req: IncomingMessage): void {
+  async handleConnection(
+    client: WebSocket,
+    req: IncomingMessage,
+  ): Promise<void> {
     let payload: InvitePayload;
 
     try {
@@ -56,13 +61,12 @@ export class ArenaGateway
       return;
     }
 
-    const session = (() => {
-      try {
-        return this.arenaService.getSession(payload.sessionId);
-      } catch {
-        return null;
-      }
-    })();
+    let session: ArenaSession | null = null;
+    try {
+      session = await this.arenaService.getSession(payload.sessionId);
+    } catch {
+      // session remains null
+    }
 
     if (!session) {
       client.send(
@@ -92,7 +96,7 @@ export class ArenaGateway
       if (existing) {
         participant = existing;
       } else {
-        participant = this.arenaService.addExternalParticipant(
+        participant = await this.arenaService.addExternalParticipant(
           payload.sessionId,
           `Agent-${Date.now()}`,
         );
@@ -127,24 +131,24 @@ export class ArenaGateway
     });
   }
 
-  handleDisconnect(client: WebSocket): void {
+  async handleDisconnect(client: WebSocket): Promise<void> {
     const info = this.clients.get(client);
     if (!info) return;
 
     if (info.role === 'agent' && info.participantId) {
-      this.arenaService.updateParticipantStatus(
+      await this.arenaService.updateParticipantStatus(
         info.sessionId,
         info.participantId,
         'disconnected',
       );
 
-      const session = (() => {
-        try {
-          return this.arenaService.getSession(info.sessionId);
-        } catch {
-          return null;
-        }
-      })();
+      let session: ArenaSession | null = null;
+      try {
+        session = await this.arenaService.getSession(info.sessionId);
+      } catch {
+        // session may not exist anymore
+      }
+
       const participant = session?.participants.find(
         (p) => p.id === info.participantId,
       );
@@ -161,10 +165,10 @@ export class ArenaGateway
     this.clients.delete(client);
   }
 
-  private handleClientMessage(
+  private async handleClientMessage(
     client: WebSocket,
     raw: Buffer | string,
-  ): void {
+  ): Promise<void> {
     const info = this.clients.get(client);
     if (!info || info.role !== 'agent') return;
 
@@ -177,30 +181,24 @@ export class ArenaGateway
 
     if (msg.type === 'identify') {
       if (info.participantId) {
-        const session = (() => {
-          try {
-            return this.arenaService.getSession(info.sessionId);
-          } catch {
-            return null;
-          }
-        })();
-        const participant = session?.participants.find(
-          (p) => p.id === info.participantId,
+        await this.arenaService.updateParticipantInfo(
+          info.sessionId,
+          info.participantId,
+          {
+            name: msg.name,
+            platform: msg.platform,
+            model: msg.model,
+          },
         );
-        if (participant) {
-          participant.name = msg.name;
-          if (msg.platform) participant.platform = msg.platform;
-          if (msg.model) participant.model = msg.model;
-        }
       }
     } else if (msg.type === 'message') {
-      const session = (() => {
-        try {
-          return this.arenaService.getSession(info.sessionId);
-        } catch {
-          return null;
-        }
-      })();
+      let session: ArenaSession | null = null;
+      try {
+        session = await this.arenaService.getSession(info.sessionId);
+      } catch {
+        // ignore
+      }
+
       const participant = session?.participants.find(
         (p) => p.id === info.participantId,
       );
@@ -216,6 +214,17 @@ export class ArenaGateway
         },
         client,
       );
+
+      // Persist transcript (fire-and-forget)
+      this.arenaService
+        .saveTranscript(
+          info.sessionId,
+          speaker,
+          'external_agent',
+          msg.text,
+          'websocket',
+        )
+        .catch(() => {});
 
       // Bridge to LiveKit data channel so voice agent can hear external agents
       if (session?.roomName) {

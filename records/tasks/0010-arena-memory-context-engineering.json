@@ -1,0 +1,229 @@
+{
+  "title": "Arena Memory & Context Engineering",
+  "plan": "records/plans/0010-arena-memory-context-engineering.md",
+  "tasks": [
+    {
+      "id": 1,
+      "phase": 1,
+      "description": "Create Drizzle schema for arena sessions, participants, transcripts, agent memories, and session briefs — the DB foundation for all memory features",
+      "steps": [
+        "Create `packages/db/src/schema/arena.ts` with tables: arenaSessions (id uuid PK defaultRandom, topic text, mode varchar(50), participationMode varchar(50), status varchar(20) default 'waiting', roomName varchar(255), createdBy text FK→user.id, startedAt timestamp, endedAt timestamp, createdAt timestamp defaultNow), arenaSessionParticipants (id uuid PK defaultRandom, sessionId uuid FK→arenaSessions.id CASCADE, agentId uuid FK→agents.id nullable, name varchar(100), type varchar(20), instructions text nullable, color varchar(7), joinedAt timestamp), arenaTranscripts (id uuid PK defaultRandom, sessionId uuid FK→arenaSessions.id CASCADE, speakerName varchar(100), speakerType varchar(20), content text, source varchar(10), timestamp timestamp defaultNow). Use camelCase JS names with snake_case column names matching existing pattern in agents.ts.",
+        "Create `packages/db/src/schema/memories.ts` with tables: agentMemories (id uuid PK defaultRandom, agentId uuid FK→agents.id CASCADE, sessionId uuid FK→arenaSessions.id CASCADE, category varchar(30), content text, confidence varchar(10) default 'medium', createdAt timestamp defaultNow, expiresAt timestamp nullable), arenaSessionBriefs (id uuid PK defaultRandom, sessionId uuid FK→arenaSessions.id UNIQUE CASCADE, decisions jsonb.$type<{text:string,confidence:string}[]>() default '[]', actionItems jsonb default '[]', unresolved jsonb default '[]', nextSessionQuestions jsonb.$type<string[]>() default '[]', createdAt timestamp defaultNow). Import arenaSessions from './arena.js' (ESM .js extension required).",
+        "Export all new tables and inferred types from `packages/db/src/schema/index.ts` — follow pattern: `export { arenaSessions, arenaSessionParticipants, arenaTranscripts } from './arena.js';` etc.",
+        "Add new exports to `packages/db/src/index.ts` barrel — add them to the existing re-export from './schema/index.js'",
+        "Run `pnpm --filter=@siestai/db generate --name=add_arena_sessions_and_memories` to generate migration SQL",
+        "Run `pnpm db:migrate` to apply migration to dev database"
+      ],
+      "files": [
+        "packages/db/src/schema/arena.ts",
+        "packages/db/src/schema/memories.ts",
+        "packages/db/src/schema/index.ts",
+        "packages/db/src/index.ts"
+      ],
+      "verify": "cd packages/db && pnpm build",
+      "done": true
+    },
+    {
+      "id": 2,
+      "phase": 1,
+      "description": "Add shared TypeScript types for arena memory, session briefs, and transcript entries to @siestai/shared",
+      "steps": [
+        "Add to `packages/shared/src/types/arena.ts` (append to existing file): ArenaTranscriptEntry interface (id, sessionId, speakerName, speakerType, content, source: 'livekit'|'websocket', timestamp), MemoryCategory type literal union ('decision'|'position'|'task'|'open_question'|'learning'), AgentMemory interface (id, agentId, sessionId, category: MemoryCategory, content, confidence: 'high'|'medium'|'low', createdAt, expiresAt?), ArenaSessionBrief interface (id, sessionId, decisions: {text:string, confidence:string}[], actionItems: {owner:string, task:string, deadline?:string}[], unresolved: {topic:string, positions:string[]}[], nextSessionQuestions: string[], createdAt)",
+        "Add new type exports to `packages/shared/src/index.ts` — append to the existing arena re-export block: `type ArenaTranscriptEntry, type MemoryCategory, type AgentMemory, type ArenaSessionBrief`",
+        "Verify re-export works in `apps/web/src/lib/types.ts` (currently does `export * from '@siestai/shared'` or similar)"
+      ],
+      "files": [
+        "packages/shared/src/types/arena.ts",
+        "packages/shared/src/index.ts"
+      ],
+      "verify": "cd packages/shared && pnpm build",
+      "done": true
+    },
+    {
+      "id": 3,
+      "phase": 2,
+      "description": "Migrate ArenaService from in-memory Map to DB persistence — all session CRUD uses Drizzle queries while keeping the same API response shapes",
+      "steps": [
+        "Import db and new schema tables at top of arena.service.ts: `import { db, arenaSessions, arenaSessionParticipants, eq, and } from '@siestai/db';` — follows same pattern as agents.service.ts (direct import, no DI)",
+        "Remove `private sessions = new Map<string, ArenaSession>();` field",
+        "Rewrite `createSession()` as async: INSERT into arenaSessions, then INSERT participants into arenaSessionParticipants. Map the DB rows back to the existing ArenaSession interface shape for the return value. The `createdBy` field comes from the user session — add userId parameter or get from controller.",
+        "Rewrite `getSession()` as async: SELECT from arenaSessions WHERE id, then SELECT from arenaSessionParticipants WHERE sessionId. Reconstruct the ArenaSession object with participants array. Throw NotFoundException if not found.",
+        "Rewrite `addExternalParticipant()` as async: INSERT into arenaSessionParticipants, return the ArenaParticipant shape",
+        "Rewrite `updateParticipantStatus()` as async: UPDATE arenaSessionParticipants SET status WHERE id = participantId",
+        "Rewrite `startSession()` as async: UPDATE arenaSessions SET status='active', startedAt=now(), roomName WHERE id AND status='waiting'",
+        "Rewrite `endSession()` as async: UPDATE arenaSessions SET status='ended', endedAt=now() WHERE id AND status='active' RETURNING * — use RETURNING to confirm the transition happened (race condition guard)",
+        "Update all call sites in arena.controller.ts to await the now-async methods",
+        "Update ArenaGateway call sites — handleConnection and handleClientMessage call getSession(). For the gateway hot path, add a brief in-memory cache (Map with 30s TTL) to avoid DB query on every WS message"
+      ],
+      "files": [
+        "apps/api/src/arena/arena.service.ts",
+        "apps/api/src/arena/arena.controller.ts",
+        "apps/api/src/arena/arena.gateway.ts"
+      ],
+      "verify": "cd apps/api && pnpm build",
+      "done": true
+    },
+    {
+      "id": 4,
+      "phase": 2,
+      "description": "Persist transcripts to DB in the transcript POST endpoint and WS message handler — save to arena_transcripts alongside existing broadcast",
+      "steps": [
+        "Add a `saveTranscript(sessionId, speakerName, speakerType, content, source)` method to ArenaService: INSERT into arenaTranscripts. Make it async, fire-and-forget from callers.",
+        "In ArenaController.postTranscript() (line 45-59): after broadcastTranscript(), call arenaService.saveTranscript(id, dto.speaker, 'native_agent', dto.text, 'livekit'). Use fire-and-forget (no await) since the endpoint returns 204 immediately.",
+        "In ArenaGateway.handleClientMessage() when type='message' (line 196-232): after broadcastToSession(), call arenaService.saveTranscript(info.sessionId, speaker, 'external_agent', msg.text, 'websocket'). This method is sync currently — use `.catch(() => {})` pattern for fire-and-forget.",
+        "PostTranscriptDto stays unchanged — {speaker, text, timestamp?} is sufficient"
+      ],
+      "files": [
+        "apps/api/src/arena/arena.service.ts",
+        "apps/api/src/arena/arena.controller.ts",
+        "apps/api/src/arena/arena.gateway.ts"
+      ],
+      "verify": "cd apps/api && pnpm build",
+      "done": true
+    },
+    {
+      "id": 5,
+      "phase": 3,
+      "description": "Build the memory extraction service — LLM-powered structured extraction of per-agent memories and session briefs from transcripts",
+      "steps": [
+        "Install @anthropic-ai/sdk in apps/api: `pnpm --filter=@siestai/api add @anthropic-ai/sdk` (MastraService doesn't expose inference methods, so use Anthropic SDK directly for extraction)",
+        "Create `apps/api/src/arena/memory-extraction.service.ts` as @Injectable(). Inject ConfigService for ANTHROPIC_API_KEY. Initialize Anthropic client in constructor.",
+        "Implement `extractAgentMemories(agentName: string, transcriptText: string): Promise<{category, content, confidence}[]>` — sends structured extraction prompt to claude-haiku-4-5-20251001 asking for JSON array of memories with categories (decision, position, task, open_question). Use system prompt to enforce JSON output.",
+        "Implement `extractSessionBrief(transcriptText: string, agentNames: string[]): Promise<{decisions, actionItems, unresolved, nextSessionQuestions}>` — extracts session-level structured output.",
+        "Implement `formatTranscriptForExtraction(transcripts: DbTranscriptRow[]): string` — concatenates transcript rows into a readable format: '[timestamp] Speaker (type): content'",
+        "Add MemoryExtractionService to ArenaModule providers array"
+      ],
+      "files": [
+        "apps/api/src/arena/memory-extraction.service.ts",
+        "apps/api/src/arena/arena.module.ts"
+      ],
+      "verify": "cd apps/api && pnpm build",
+      "done": true
+    },
+    {
+      "id": 6,
+      "phase": 3,
+      "description": "Wire extraction pipeline to session end — trigger async LLM extraction when a session transitions to 'ended', store results in DB",
+      "steps": [
+        "Import MemoryExtractionService and memory schema tables in ArenaService",
+        "Add `triggerSessionEndExtraction(sessionId: string): void` method to ArenaService — this is fire-and-forget (returns void, runs async internally with .catch for error logging)",
+        "Inside the method: 1) SELECT transcripts from arenaTranscripts WHERE sessionId, 2) SELECT participants from arenaSessionParticipants WHERE sessionId, 3) Format transcript text, 4) For each native_agent participant that has an agentId: call extractAgentMemories(), INSERT results into agentMemories table, 5) Call extractSessionBrief(), INSERT into arenaSessionBriefs table",
+        "Call `triggerSessionEndExtraction(sessionId)` at the end of `endSession()` — only if the status transition succeeded (RETURNING confirmed active→ended)",
+        "Add error handling: wrap entire extraction in try/catch, log errors with Logger, never throw — extraction failure must not affect session end response"
+      ],
+      "files": [
+        "apps/api/src/arena/arena.service.ts"
+      ],
+      "verify": "cd apps/api && pnpm build",
+      "done": true
+    },
+    {
+      "id": 7,
+      "phase": 3,
+      "description": "Add API endpoints for querying agent memories and session briefs",
+      "steps": [
+        "Add to ArenaService: `getSessionBrief(sessionId: string)` — SELECT from arenaSessionBriefs WHERE sessionId. Return null if not found (extraction may still be running).",
+        "Add to ArenaService: `getAgentMemoriesForSession(sessionId: string)` — SELECT from agentMemories WHERE sessionId, for the session brief page to show per-agent context.",
+        "Add to ArenaController: `GET /arena/sessions/:id/brief` — returns session brief + session metadata. If brief is null, return 202 Accepted with {status: 'processing'} to indicate extraction is still running.",
+        "Add to AgentsService: `getAgentMemories(agentId: string, limit = 20)` — SELECT from agentMemories WHERE agentId ORDER BY createdAt DESC LIMIT. Import agentMemories table from @siestai/db.",
+        "Add to AgentsController: `GET /agents/:id/memories` — returns recent memories for an agent"
+      ],
+      "files": [
+        "apps/api/src/arena/arena.service.ts",
+        "apps/api/src/arena/arena.controller.ts",
+        "apps/api/src/agents/agents.service.ts",
+        "apps/api/src/agents/agents.controller.ts"
+      ],
+      "verify": "cd apps/api && pnpm build",
+      "done": true
+    },
+    {
+      "id": 8,
+      "phase": 4,
+      "description": "Inject agent memories into ArenaAgent system prompt at session start — load memories, include in room metadata, render in prompt",
+      "steps": [
+        "In ArenaController.startSession(): before calling livekitService.generateArenaToken(), for each native_agent participant that has an agentId, call agentsService.getAgentMemories(agentId, 10). Format each agent's memories as a compact string: '- [category] content (session date)'. Cap at 500 chars per agent.",
+        "Extend the ArenaAgentConfig interface in arena-agent.ts: add optional `memories?: string` field",
+        "In LivekitService.generateArenaToken(): update the metadata.agents mapping to include the memories string for each agent — `{ name: p.name, instructions: p.instructions, memories: p.memories }`",
+        "ArenaController needs AgentsService injected — add to constructor. ArenaModule needs to import AgentsModule (or AgentsModule needs to export AgentsService).",
+        "In ArenaAgent constructor (arena-agent.ts): after the Role section (section[0]) and before Characters section, check if any agent has memories. If so, add a '## Context from Previous Sessions' section with each agent's memory block wrapped: `<memory agent=\"{name}\">{memories}</memory>`",
+        "Adjust the MAX_SYSTEM_PROMPT_CHARS budget calculation: memory chars should be included in the overhead calculation so per-agent instruction truncation accounts for memory space"
+      ],
+      "files": [
+        "apps/api/src/arena/arena.controller.ts",
+        "apps/api/src/arena/arena.module.ts",
+        "apps/api/src/livekit/livekit.service.ts",
+        "apps/agent/src/arena-agent.ts"
+      ],
+      "verify": "cd apps/agent && pnpm build && cd ../../apps/api && pnpm build",
+      "done": true
+    },
+    {
+      "id": 9,
+      "phase": 4,
+      "description": "Add frontend API functions for memory and brief endpoints — using arena-api.ts pattern for arena endpoints, ApiClient for agent endpoints",
+      "steps": [
+        "Add to `apps/web/src/lib/arena-api.ts`: `getArenaSessionBrief(sessionId: string): Promise<ArenaSessionBrief | null>` — GET /arena/sessions/:id/brief. Handle 202 status (still processing) by returning null. Follow existing fetch pattern with credentials: 'include'.",
+        "Add to `apps/web/src/lib/api.ts` ApiClient class: `getAgentMemories(agentId: string): Promise<AgentMemory[]>` — GET /agents/:id/memories. Follow existing request() pattern.",
+        "Import the new types (AgentMemory, ArenaSessionBrief) from types.ts in both files"
+      ],
+      "files": [
+        "apps/web/src/lib/arena-api.ts",
+        "apps/web/src/lib/api.ts"
+      ],
+      "verify": "cd apps/web && pnpm build",
+      "done": true
+    },
+    {
+      "id": 10,
+      "phase": 5,
+      "description": "Build the Session Brief page — post-session view at /arena/sessions/[id]/brief showing extracted decisions, action items, unresolved topics",
+      "steps": [
+        "Create `apps/web/src/app/(app)/arena/sessions/[id]/brief/page.tsx` as 'use client' component. Use useParams() to get session id.",
+        "Fetch session brief via getArenaSessionBrief(sessionId) on mount with useEffect + useState. If null (still processing), show a loading/processing state with a spinner and auto-retry every 3 seconds.",
+        "Render structured sections in card layout: Decisions (text + confidence badge), Action Items (task + owner tag: agent name or 'human'), Unresolved Topics (topic + agent positions), Next Session Questions (bulleted list)",
+        "Add a 'View Session Brief' link/button to the arena page's ended state. The arena page is at `apps/web/src/app/(app)/arena/page.tsx` — find the ended state render and add a Link to /arena/sessions/{sessionId}/brief.",
+        "Style with existing dark theme: use bg-card, border-border, text-foreground. Use cyan accent for confidence badges. Match existing page patterns (padding, max-width, etc.)"
+      ],
+      "files": [
+        "apps/web/src/app/(app)/arena/sessions/[id]/brief/page.tsx",
+        "apps/web/src/app/(app)/arena/page.tsx"
+      ],
+      "verify": "cd apps/web && pnpm build",
+      "done": true
+    },
+    {
+      "id": 11,
+      "phase": 5,
+      "description": "Add memory display section to agent detail page — show recent episodic memories so users see what agents remember from past sessions",
+      "steps": [
+        "Create `apps/web/src/components/agents/agent-memories.tsx` — a client component that takes agentId prop, fetches memories via api.getAgentMemories(agentId), displays them grouped by session",
+        "Each memory shows: category badge (colored: cyan for decision, green for task, yellow for open_question, purple for position), content text, timestamp, confidence indicator",
+        "Add the AgentMemories component as a new collapsible section in the agent detail page `apps/web/src/app/(app)/agents/[id]/page.tsx`. Only render if agent has memories (conditional on non-empty array).",
+        "Use existing UI components: Card, Badge from shadcn/ui. Match the styling of other sections on the agent detail page."
+      ],
+      "files": [
+        "apps/web/src/components/agents/agent-memories.tsx",
+        "apps/web/src/app/(app)/agents/[id]/page.tsx"
+      ],
+      "verify": "cd apps/web && pnpm build",
+      "done": true
+    },
+    {
+      "id": 12,
+      "phase": 6,
+      "description": "E2E verification — verify session brief page renders and agent memories section appears in agent detail",
+      "steps": [
+        "agent-browser open http://localhost:3000/arena && agent-browser wait --load networkidle",
+        "agent-browser screenshot --full screenshots/0010-arena-memory/arena-landing.png",
+        "Navigate to a seed agent detail page: agent-browser open http://localhost:3000/agents && agent-browser wait --load networkidle",
+        "agent-browser snapshot -i && click on first agent to navigate to detail page",
+        "agent-browser screenshot --full screenshots/0010-arena-memory/agent-detail-page.png",
+        "agent-browser close"
+      ],
+      "files": [],
+      "verify": "ls screenshots/0010-arena-memory/*.png | wc -l",
+      "done": true
+    }
+  ]
+}

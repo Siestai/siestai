@@ -8,7 +8,7 @@ import {
   jsonb,
   unique,
 } from 'drizzle-orm/pg-core';
-import { agents } from './agents.js';
+import { agents } from './agents';
 
 export const tools = pgTable('tools', {
   id: uuid('id').primaryKey().defaultRandom(),
