@@ -3,13 +3,10 @@ import type { UIMessage } from 'ai';
 import { AgentsService } from '../agents.service';
 import { ToolRegistryService } from '../../tools/tool-registry.service';
 import { MastraService } from '../../mastra/mastra.service';
-import { mastra, chatMemory } from '../../mastra/instance';
 import { createRuntimeAgent } from '../../mastra/runtime';
 
 export interface ChatStreamResult {
-  workflowStream: ReturnType<
-    Awaited<ReturnType<ReturnType<typeof mastra.getWorkflow>['createRun']>>['stream']
-  >;
+  workflowStream: AsyncIterable<unknown>;
   ephemeralKey: string;
 }
 
@@ -39,11 +36,12 @@ export class AgentChatService {
       );
     }
 
-    const agent = createRuntimeAgent(agentRecord as any, tools, chatMemory);
+    const memory = this.mastraService.getChatMemory();
+    const agent = createRuntimeAgent(agentRecord as any, tools, memory);
     const ephemeralKey = this.mastraService.registerEphemeralAgent(agent);
 
     const threadId = `${userId}:${agentId}`;
-    const workflow = mastra.getWorkflow('agentChatWorkflow');
+    const workflow = this.mastraService.getWorkflow('agentChatWorkflow');
     const run = await workflow.createRun({
       resourceId: userId,
       runId: `${agentRecord.name}:${threadId}:${Date.now()}`,

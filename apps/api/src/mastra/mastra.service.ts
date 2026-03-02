@@ -1,8 +1,9 @@
 import { Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
 import { Agent } from '@mastra/core/agent';
+import type { Memory } from '@mastra/memory';
 import { randomUUID } from 'crypto';
 import { db, agents, eq } from '@siestai/db';
-import { mastra } from './instance';
+import { mastra, chatMemory } from './instance';
 import { createRuntimeAgent } from './runtime';
 
 export interface AgentRow {
@@ -80,6 +81,14 @@ export class MastraService implements OnApplicationBootstrap {
   unregisterEphemeralAgent(key: string): void {
     mastra.removeAgent(key);
     this.logger.debug(`Unregistered ephemeral agent ${key}`);
+  }
+
+  getChatMemory(): Memory {
+    return chatMemory;
+  }
+
+  getWorkflow(name: string) {
+    return mastra.getWorkflow(name);
   }
 
   listRegistered(): { count: number; agentIds: string[] } {
