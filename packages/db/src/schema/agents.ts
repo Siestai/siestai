@@ -8,7 +8,7 @@ import {
   timestamp,
   jsonb,
 } from 'drizzle-orm/pg-core';
-import { user } from './auth';
+import { user } from './auth.js';
 
 export const agentSourceEnum = pgEnum('agent_source', [
   'mastra',

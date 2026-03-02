@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   Wrench,
   Globe,
@@ -10,11 +10,26 @@ import {
   Calendar,
   Mail,
   Search,
+  Github,
+  ExternalLink,
+  Unplug,
+  Key,
+  Loader2,
   type LucideIcon,
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
-import type { Tool } from "@/lib/types";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import type { ToolWithStatus } from "@/lib/types";
 
 const TOOL_ICON_MAP: Record<string, LucideIcon> = {
   globe: Globe,
@@ -25,29 +40,136 @@ const TOOL_ICON_MAP: Record<string, LucideIcon> = {
   mail: Mail,
   wrench: Wrench,
   search: Search,
+  github: Github,
 };
 
 const CATEGORY_COLORS: Record<string, string> = {
   search: "#3b82f6",
+  research: "#3b82f6",
   utility: "#22c55e",
   developer: "#8b5cf6",
+  development: "#8b5cf6",
   creative: "#ec4899",
   productivity: "#eab308",
+  communication: "#f97316",
 };
 
+function StatusBadge({ tool }: { tool: ToolWithStatus }) {
+  if (tool.type === "api_key") {
+    return (
+      <span
+        className={cn(
+          "text-[10px] px-2 py-0.5 rounded-full inline-flex items-center gap-1",
+          tool.connected
+            ? "bg-emerald-500/10 text-emerald-400"
+            : "bg-amber-500/10 text-amber-400"
+        )}
+      >
+        <span
+          className={cn(
+            "h-1.5 w-1.5 rounded-full",
+            tool.connected ? "bg-emerald-400" : "bg-amber-400"
+          )}
+        />
+        {tool.connected ? "Configured" : "API Key Required"}
+      </span>
+    );
+  }
+
+  if (tool.type === "oauth") {
+    return (
+      <span
+        className={cn(
+          "text-[10px] px-2 py-0.5 rounded-full inline-flex items-center gap-1",
+          tool.connected
+            ? "bg-emerald-500/10 text-emerald-400"
+            : "bg-secondary text-muted-foreground"
+        )}
+      >
+        <span
+          className={cn(
+            "h-1.5 w-1.5 rounded-full",
+            tool.connected ? "bg-emerald-400" : "bg-muted-foreground"
+          )}
+        />
+        {tool.connected ? "Connected" : "Not Connected"}
+      </span>
+    );
+  }
+
+  return (
+    <span
+      className={cn(
+        "text-[10px] px-2 py-0.5 rounded-full",
+        tool.isActive
+          ? "bg-emerald-500/10 text-emerald-400"
+          : "bg-secondary text-muted-foreground"
+      )}
+    >
+      {tool.isActive ? "Active" : "Inactive"}
+    </span>
+  );
+}
+
 export default function ToolsPage() {
-  const [tools, setTools] = useState<Tool[]>([]);
+  const [tools, setTools] = useState<ToolWithStatus[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
 
-  useEffect(() => {
-    api
-      .listTools()
-      .then(setTools)
-      .catch(() => {})
-      .finally(() => setLoading(false));
+  // API key config dialog state
+  const [apiKeyDialog, setApiKeyDialog] = useState<ToolWithStatus | null>(null);
+  const [apiKeyValue, setApiKeyValue] = useState("");
+  const [apiKeySaving, setApiKeySaving] = useState(false);
+
+  // Disconnecting state
+  const [disconnecting, setDisconnecting] = useState<string | null>(null);
+
+  const loadTools = useCallback(async () => {
+    try {
+      const data = await api.listToolsWithStatus();
+      setTools(data);
+    } catch {
+      // failed
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    loadTools();
+  }, [loadTools]);
+
+  const handleOAuthConnect = (slug: string) => {
+    window.location.href = api.getOAuthConnectUrl(slug);
+  };
+
+  const handleOAuthDisconnect = async (slug: string) => {
+    setDisconnecting(slug);
+    try {
+      await api.disconnectToolOAuth(slug);
+      await loadTools();
+    } catch {
+      // failed
+    } finally {
+      setDisconnecting(null);
+    }
+  };
+
+  const handleApiKeySave = async () => {
+    if (!apiKeyDialog || !apiKeyValue.trim()) return;
+    setApiKeySaving(true);
+    try {
+      await api.configureTool(apiKeyDialog.slug, { apiKey: apiKeyValue.trim() });
+      setApiKeyDialog(null);
+      setApiKeyValue("");
+      await loadTools();
+    } catch {
+      // failed
+    } finally {
+      setApiKeySaving(false);
+    }
+  };
 
   const categories = [
     "all",
@@ -73,6 +195,7 @@ export default function ToolsPage() {
         <h1 className="text-2xl font-semibold text-foreground">Tools</h1>
         <p className="text-sm text-muted-foreground">
           Browse available tools that extend your agents&apos; capabilities.
+          Connect OAuth accounts or configure API keys to get started.
         </p>
       </div>
 
@@ -129,16 +252,20 @@ export default function ToolsPage() {
           {filtered.map((tool) => {
             const Icon = TOOL_ICON_MAP[tool.icon] || Wrench;
             const color = CATEGORY_COLORS[tool.category] || "#6b7280";
+            const isDisconnecting = disconnecting === tool.slug;
             return (
               <div
                 key={tool.id}
-                className="group rounded-xl border border-border bg-card hover:border-muted-foreground/30 transition-colors p-5 space-y-3"
+                className="group rounded-xl border border-border bg-card hover:border-muted-foreground/30 transition-colors p-5 flex flex-col gap-3"
               >
-                <div
-                  className="h-10 w-10 rounded-lg flex items-center justify-center"
-                  style={{ backgroundColor: `${color}15` }}
-                >
-                  <Icon className="h-5 w-5" style={{ color }} />
+                <div className="flex items-start justify-between">
+                  <div
+                    className="h-10 w-10 rounded-lg flex items-center justify-center shrink-0"
+                    style={{ backgroundColor: `${color}15` }}
+                  >
+                    <Icon className="h-5 w-5" style={{ color }} />
+                  </div>
+                  <StatusBadge tool={tool} />
                 </div>
                 <div>
                   <h3 className="text-sm font-semibold text-foreground">
@@ -148,7 +275,7 @@ export default function ToolsPage() {
                     {tool.description}
                   </p>
                 </div>
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between mt-auto pt-1">
                   <span
                     className="text-[10px] px-2 py-0.5 rounded-full font-medium capitalize"
                     style={{
@@ -158,22 +285,119 @@ export default function ToolsPage() {
                   >
                     {tool.category}
                   </span>
-                  <span
-                    className={cn(
-                      "text-[10px] px-2 py-0.5 rounded-full",
-                      tool.isActive
-                        ? "bg-emerald-500/10 text-emerald-400"
-                        : "bg-secondary text-muted-foreground"
-                    )}
-                  >
-                    {tool.isActive ? "Active" : "Inactive"}
-                  </span>
+
+                  {/* Action buttons */}
+                  {tool.type === "oauth" && !tool.connected && (
+                    <Button
+                      variant="outline"
+                      size="xs"
+                      onClick={() => handleOAuthConnect(tool.slug)}
+                    >
+                      <ExternalLink className="h-3 w-3" />
+                      Connect
+                    </Button>
+                  )}
+                  {tool.type === "oauth" && tool.connected && (
+                    <Button
+                      variant="ghost"
+                      size="xs"
+                      onClick={() => handleOAuthDisconnect(tool.slug)}
+                      disabled={isDisconnecting}
+                      className="text-muted-foreground hover:text-destructive"
+                    >
+                      {isDisconnecting ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : (
+                        <Unplug className="h-3 w-3" />
+                      )}
+                      Disconnect
+                    </Button>
+                  )}
+                  {tool.type === "api_key" && !tool.connected && (
+                    <Button
+                      variant="outline"
+                      size="xs"
+                      onClick={() => {
+                        setApiKeyDialog(tool);
+                        setApiKeyValue("");
+                      }}
+                    >
+                      <Key className="h-3 w-3" />
+                      Configure
+                    </Button>
+                  )}
+                  {tool.type === "api_key" && tool.connected && (
+                    <Button
+                      variant="ghost"
+                      size="xs"
+                      onClick={() => {
+                        setApiKeyDialog(tool);
+                        setApiKeyValue("");
+                      }}
+                      className="text-muted-foreground"
+                    >
+                      <Key className="h-3 w-3" />
+                      Reconfigure
+                    </Button>
+                  )}
                 </div>
               </div>
             );
           })}
         </div>
       )}
+
+      {/* API Key Configuration Dialog */}
+      <Dialog
+        open={apiKeyDialog !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setApiKeyDialog(null);
+            setApiKeyValue("");
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Configure {apiKeyDialog?.name}</DialogTitle>
+            <DialogDescription>
+              Enter your API key to enable {apiKeyDialog?.name} for your agents.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Input
+              type="password"
+              placeholder="Enter API key..."
+              value={apiKeyValue}
+              onChange={(e) => setApiKeyValue(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handleApiKeySave();
+              }}
+            />
+            <p className="text-xs text-muted-foreground">
+              Your API key is encrypted and stored securely.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setApiKeyDialog(null);
+                setApiKeyValue("");
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleApiKeySave}
+              disabled={!apiKeyValue.trim() || apiKeySaving}
+            >
+              {apiKeySaving && <Loader2 className="h-4 w-4 animate-spin" />}
+              Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -34,7 +34,15 @@ export {
   type ArenaLiveState,
 } from './types/livekit';
 
-export { type Tool, type AgentTool } from './types/tool';
+export {
+  type ToolType,
+  type Tool,
+  type ToolWithStatus,
+  type ToolCredentialStatus,
+  type ToolSlug,
+  TOOL_SLUGS,
+  type AgentTool,
+} from './types/tool';
 
 export {
   type HealthResponse,

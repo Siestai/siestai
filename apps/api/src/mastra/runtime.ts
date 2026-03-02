@@ -1,4 +1,5 @@
 import { Agent } from '@mastra/core/agent';
+import type { ToolsInput } from '@mastra/core/agent';
 import type { Agent as DbAgent } from '@siestai/db';
 
 /**
@@ -6,11 +7,15 @@ import type { Agent as DbAgent } from '@siestai/db';
  * Used for dynamic streaming — each request loads config from DB
  * and spins up a throwaway Agent with that config.
  */
-export function createRuntimeAgent(record: DbAgent): Agent {
+export function createRuntimeAgent(
+  record: DbAgent,
+  tools?: ToolsInput,
+): Agent {
   return new Agent({
     id: record.id,
     name: record.name,
     instructions: record.instructions,
     model: record.llmModel || 'anthropic/claude-sonnet-4-6',
+    ...(tools && Object.keys(tools).length > 0 ? { tools } : {}),
   });
 }

@@ -12,6 +12,8 @@ import type {
   AgentFile,
   AgentMemory,
   Tool,
+  ToolWithStatus,
+  ToolCredentialStatus,
   AgentTool,
 } from "./types";
 
@@ -109,6 +111,29 @@ class ApiClient {
   // Tools
   async listTools(): Promise<Tool[]> {
     return this.request<Tool[]>("/tools");
+  }
+
+  async listToolsWithStatus(): Promise<ToolWithStatus[]> {
+    return this.request<ToolWithStatus[]>("/tools");
+  }
+
+  async getToolOAuthStatus(slug: string): Promise<ToolCredentialStatus> {
+    return this.request<ToolCredentialStatus>(`/tools/${slug}/oauth/status`);
+  }
+
+  async disconnectToolOAuth(slug: string): Promise<void> {
+    await this.request(`/tools/${slug}/oauth/disconnect`, { method: "DELETE" });
+  }
+
+  async configureTool(slug: string, config: { apiKey: string }): Promise<void> {
+    await this.request(`/tools/${slug}/configure`, {
+      method: "POST",
+      body: JSON.stringify(config),
+    });
+  }
+
+  getOAuthConnectUrl(slug: string): string {
+    return `${this.baseUrl}/tools/${slug}/oauth/connect`;
   }
 
   async listAgentTools(agentId: string): Promise<AgentTool[]> {

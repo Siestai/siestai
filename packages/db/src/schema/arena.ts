@@ -6,8 +6,8 @@ import {
   timestamp,
   index,
 } from 'drizzle-orm/pg-core';
-import { user } from './auth';
-import { agents } from './agents';
+import { user } from './auth.js';
+import { agents } from './agents.js';
 
 export const arenaSessions = pgTable('arena_sessions', {
   id: uuid('id').primaryKey().defaultRandom(),

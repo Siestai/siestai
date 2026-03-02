@@ -1,9 +1,16 @@
 import { log, voice } from '@livekit/agents';
 
+export interface ArenaToolDef {
+  slug: string;
+  name: string;
+  description: string;
+}
+
 export interface ArenaAgentConfig {
   name: string;
   instructions: string;
   memories?: string;
+  tools?: ArenaToolDef[];
 }
 
 export interface ArenaMetadata {
@@ -14,6 +21,7 @@ export interface ArenaMetadata {
   participationMode: string;
   sessionId?: string;
   backendUrl?: string;
+  toolSecret?: string;
 }
 
 /**
@@ -81,6 +89,34 @@ export class ArenaAgent extends voice.Agent {
         sections.push(
           `<memory agent="${agent.name}">${agent.memories}</memory>`,
         );
+      }
+    }
+
+    // 3b. Tools available to agents
+    const allTools = metadata.agents.flatMap((a) => a.tools ?? []);
+    if (allTools.length > 0) {
+      // Deduplicate by slug
+      const seen = new Set<string>();
+      const uniqueTools = allTools.filter((t) => {
+        if (seen.has(t.slug)) return false;
+        seen.add(t.slug);
+        return true;
+      });
+
+      sections.push('');
+      sections.push('## Available Tools');
+      sections.push(
+        'You have access to the following tools. To use a tool, include the following marker in your response on its own line:',
+      );
+      sections.push(
+        '[TOOL_CALL] slug: <tool_slug>, action: <action>, params: <json_object>',
+      );
+      sections.push(
+        'Wait for the tool result (delivered as [TOOL_RESULT]) before continuing your response.',
+      );
+      sections.push('');
+      for (const tool of uniqueTools) {
+        sections.push(`- ${tool.slug}: ${tool.description}`);
       }
     }
 
