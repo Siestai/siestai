@@ -33,6 +33,9 @@ export const mastra = new Mastra({
     agentChatWorkflow,
   },
   storage,
+  server: {
+    port: 4111,
+  },
   observability: new Observability({
     configs: {
       default: {
