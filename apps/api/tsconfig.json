@@ -1,7 +1,6 @@
 {
   "extends": "@siestai/tsconfig/nestjs.json",
   "compilerOptions": {
-    "resolvePackageJsonExports": true,
     "removeComments": true,
     "allowSyntheticDefaultImports": true,
     "outDir": "./dist",
