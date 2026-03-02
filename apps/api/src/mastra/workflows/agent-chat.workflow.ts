@@ -3,7 +3,7 @@ import { z } from 'zod';
 
 const chatInputSchema = z.object({
   agentKey: z.string(),
-  messages: z.array(z.record(z.unknown())),
+  messages: z.array(z.unknown()),
   userId: z.string(),
   agentId: z.string(),
   threadId: z.string(),

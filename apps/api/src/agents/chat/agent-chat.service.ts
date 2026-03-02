@@ -49,7 +49,7 @@ export class AgentChatService {
     const workflowStream = run.stream({
       inputData: {
         agentKey: ephemeralKey,
-        messages,
+        messages: messages as unknown[],
         userId,
         agentId,
         threadId,

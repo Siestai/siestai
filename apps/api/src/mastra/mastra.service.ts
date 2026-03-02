@@ -87,7 +87,7 @@ export class MastraService implements OnApplicationBootstrap {
     return chatMemory;
   }
 
-  getWorkflow(name: string) {
+  getWorkflow(name: 'agentChatWorkflow') {
     return mastra.getWorkflow(name);
   }
 
