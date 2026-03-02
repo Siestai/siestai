@@ -265,6 +265,12 @@ export class ArenaService {
 
     this.invalidateCache(sessionId);
 
+    // Clean up ephemeral participant data to prevent memory leak
+    const participants = await this.getSessionParticipantRows(sessionId);
+    for (const p of participants) {
+      this.participantExtras.delete(p.id);
+    }
+
     // Fire-and-forget: trigger async LLM extraction
     this.triggerSessionEndExtraction(sessionId);
   }
