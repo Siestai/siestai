@@ -6,6 +6,7 @@ import { InvitationService } from './invitation.service';
 import { LivekitService } from '../livekit/livekit.service';
 import { ArenaGateway } from './arena.gateway';
 import { AgentsService } from '../agents/agents.service';
+import { ToolsService } from '../tools/tools.service';
 import { CreateArenaSessionDto } from './dto/create-arena-session.dto';
 import { JoinArenaDto } from './dto/join-arena.dto';
 import { PostTranscriptDto } from './dto/post-transcript.dto';
@@ -18,6 +19,7 @@ export class ArenaController {
     private readonly livekitService: LivekitService,
     private readonly arenaGateway: ArenaGateway,
     private readonly agentsService: AgentsService,
+    private readonly toolsService: ToolsService,
   ) {}
 
   @Post('sessions')
@@ -35,8 +37,9 @@ export class ArenaController {
     const session = await this.arenaService.getSession(id);
     await this.arenaService.validateCanStart(id);
 
-    // Load agent memories for each native_agent participant with an agentId
+    // Load agent memories and tool definitions for each native_agent participant with an agentId
     const agentMemories = new Map<string, string>();
+    const agentToolDefs = new Map<string, { slug: string; name: string; description: string }[]>();
     const participantRows =
       await this.arenaService.getSessionParticipantRows(id);
     for (const p of participantRows) {
@@ -57,12 +60,26 @@ export class ArenaController {
           }
           agentMemories.set(p.name, formatted);
         }
+
+        // Fetch connected tool definitions for this agent
+        const toolRows = await this.toolsService.getAgentToolsWithDefinitions(p.agentId);
+        if (toolRows.length > 0) {
+          agentToolDefs.set(
+            p.name,
+            toolRows.map((t) => ({
+              slug: t.slug!,
+              name: t.toolName!,
+              description: t.toolDescription ?? '',
+            })),
+          );
+        }
       }
     }
 
     const result = await this.livekitService.generateArenaToken(
       session,
       agentMemories.size > 0 ? agentMemories : undefined,
+      agentToolDefs.size > 0 ? agentToolDefs : undefined,
     );
     await this.arenaService.startSession(id, result.roomName);
     this.arenaGateway.broadcastSessionStarted(id, result.roomName);

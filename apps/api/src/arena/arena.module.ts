@@ -7,9 +7,10 @@ import { ArenaGateway } from './arena.gateway';
 import { MemoryExtractionService } from './memory-extraction.service';
 import { LivekitModule } from '../livekit/livekit.module';
 import { AgentsModule } from '../agents/agents.module';
+import { ToolsModule } from '../tools/tools.module';
 
 @Module({
-  imports: [LivekitModule, ConfigModule, AgentsModule],
+  imports: [LivekitModule, ConfigModule, AgentsModule, ToolsModule],
   controllers: [ArenaController],
   providers: [ArenaService, InvitationService, ArenaGateway, MemoryExtractionService],
 })

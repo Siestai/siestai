@@ -78,6 +78,7 @@ export class LivekitService {
   async generateArenaToken(
     session: ArenaSession,
     agentMemories?: Map<string, string>,
+    agentToolDefs?: Map<string, { slug: string; name: string; description: string }[]>,
   ): Promise<{ token: string; serverUrl: string; roomName: string }> {
     const apiKey = this.configService.get<string>('LIVEKIT_API_KEY');
     const apiSecret = this.configService.get<string>('LIVEKIT_API_SECRET');
@@ -93,6 +94,9 @@ export class LivekitService {
     const backendUrl =
       this.configService.get<string>('BACKEND_URL') || 'http://localhost:4200';
 
+    const toolSecret =
+      this.configService.get<string>('AGENT_TOOL_SECRET') || '';
+
     const metadata = JSON.stringify({
       type: 'arena',
       agents: session.participants
@@ -103,12 +107,16 @@ export class LivekitService {
           ...(agentMemories?.get(p.name) && {
             memories: agentMemories.get(p.name),
           }),
+          ...(agentToolDefs?.get(p.name) && {
+            tools: agentToolDefs.get(p.name),
+          }),
         })),
       mode: session.mode,
       topic: session.topic,
       participationMode: session.participationMode,
       sessionId: session.id,
       backendUrl,
+      ...(toolSecret && { toolSecret }),
     });
 
     if (Buffer.byteLength(metadata, 'utf8') > 60 * 1024) {
