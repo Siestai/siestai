@@ -30,12 +30,12 @@ export default function SessionBriefPage({
   const [brief, setBrief] = useState<ArenaSessionBrief | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const retryRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     let cancelled = false;
 
-    async function fetchBrief() {
+    async function poll() {
       try {
         const result = await getArenaSessionBrief(id);
         if (cancelled) return;
@@ -43,30 +43,9 @@ export default function SessionBriefPage({
         if (result) {
           setBrief(result);
           setLoading(false);
-          if (retryRef.current) {
-            clearInterval(retryRef.current);
-            retryRef.current = null;
-          }
         } else {
-          // Still processing — retry every 3s
-          if (!retryRef.current) {
-            retryRef.current = setInterval(async () => {
-              try {
-                const r = await getArenaSessionBrief(id);
-                if (cancelled) return;
-                if (r) {
-                  setBrief(r);
-                  setLoading(false);
-                  if (retryRef.current) {
-                    clearInterval(retryRef.current);
-                    retryRef.current = null;
-                  }
-                }
-              } catch {
-                // keep retrying
-              }
-            }, 3000);
-          }
+          // Still processing — schedule next poll after 3s
+          timeoutRef.current = setTimeout(poll, 3000);
         }
       } catch (err) {
         if (cancelled) return;
@@ -75,13 +54,13 @@ export default function SessionBriefPage({
       }
     }
 
-    fetchBrief();
+    poll();
 
     return () => {
       cancelled = true;
-      if (retryRef.current) {
-        clearInterval(retryRef.current);
-        retryRef.current = null;
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
       }
     };
   }, [id]);
