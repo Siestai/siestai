@@ -112,6 +112,12 @@ export class ArenaController {
     };
   }
 
+  @Post('sessions/:id/end')
+  @HttpCode(204)
+  async endSession(@Param('id') id: string): Promise<void> {
+    await this.arenaService.endSession(id);
+  }
+
   @Get('sessions/:id/brief')
   async getSessionBrief(@Param('id') id: string, @Res() res: Response) {
     // Validate session exists
