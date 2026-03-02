@@ -109,8 +109,11 @@ export function ArenaSessionProvider({ children }: { children: ReactNode }) {
             console.log("[arena-ws] session_started, room:", msg.roomName);
           }
           break;
-        case "agent_message":
-        case "transcript": {
+        case "agent_message": {
+          // Only external agent messages come through here.
+          // Native agent transcripts arrive via LiveKit in real-time;
+          // the WS "transcript" type is a delayed duplicate posted by the
+          // agent worker after the utterance completes — skip it.
           const ts = msg.timestamp ?? Date.now();
           const wsMsg: TranscriptMessage = {
             id: `ws-${ts}-${msg.speaker}`,
@@ -120,9 +123,16 @@ export function ArenaSessionProvider({ children }: { children: ReactNode }) {
             timestamp: ts,
             source: "ws",
           };
-          setWsMessages((prev) => [...prev, wsMsg]);
+          setWsMessages((prev) => {
+            if (prev.some((m) => m.text === wsMsg.text)) return prev;
+            return [...prev, wsMsg];
+          });
           break;
         }
+        case "transcript":
+          // Ignore — native agent transcripts are already delivered
+          // in real-time via LiveKit agentTranscriptions.
+          break;
         case "session_ended":
           setSession((prev) =>
             prev ? { ...prev, status: "ended" as const } : prev,
