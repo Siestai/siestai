@@ -17,7 +17,7 @@ export class AgentChatController {
     @Body() dto: AgentChatDto,
     @Res() res: Response,
   ) {
-    const { output, ephemeralKey } = await this.chatService.streamChat(
+    const { workflowStream, ephemeralKey } = await this.chatService.streamChat(
       id,
       dto.messages,
       session.user.id,
@@ -27,7 +27,9 @@ export class AgentChatController {
       originalMessages: dto.messages,
       execute: async ({ writer }) => {
         try {
-          for await (const part of toAISdkStream(output, { from: 'agent' })) {
+          for await (const part of toAISdkStream(workflowStream as any, {
+            from: 'workflow',
+          })) {
             await writer.write(part);
           }
         } finally {

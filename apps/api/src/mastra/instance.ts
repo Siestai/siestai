@@ -1,7 +1,9 @@
 import { Mastra } from '@mastra/core';
 import { Agent } from '@mastra/core/agent';
+import { Memory } from '@mastra/memory';
 import { PostgresStore } from '@mastra/pg';
 import { Observability, DefaultExporter } from '@mastra/observability';
+import { agentChatWorkflow } from './workflows/agent-chat.workflow';
 
 const defaultAgent = new Agent({
   id: 'default-agent',
@@ -11,9 +13,18 @@ const defaultAgent = new Agent({
   model: 'anthropic/claude-sonnet-4-6',
 });
 
+export const chatMemory = new Memory({
+  options: {
+    lastMessages: 20,
+  },
+});
+
 export const mastra = new Mastra({
   agents: {
     defaultAgent,
+  },
+  workflows: {
+    agentChatWorkflow,
   },
   server: {
     port: 4111,

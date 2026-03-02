@@ -1,13 +1,15 @@
 import { Injectable, Logger } from '@nestjs/common';
 import type { UIMessage } from 'ai';
-import type { MastraModelOutput } from '@mastra/core/stream';
 import { AgentsService } from '../agents.service';
 import { ToolRegistryService } from '../../tools/tool-registry.service';
 import { MastraService } from '../../mastra/mastra.service';
+import { mastra, chatMemory } from '../../mastra/instance';
 import { createRuntimeAgent } from '../../mastra/runtime';
 
 export interface ChatStreamResult {
-  output: MastraModelOutput<any>;
+  workflowStream: ReturnType<
+    Awaited<ReturnType<ReturnType<typeof mastra.getWorkflow>['createRun']>>['stream']
+  >;
   ephemeralKey: string;
 }
 
@@ -37,24 +39,22 @@ export class AgentChatService {
       );
     }
 
-    const agent = createRuntimeAgent(agentRecord as any, tools);
+    const agent = createRuntimeAgent(agentRecord as any, tools, chatMemory);
     const ephemeralKey = this.mastraService.registerEphemeralAgent(agent);
 
-    const conversationId = `${userId}:${agentId}`;
-
-    const output = await agent.stream(messages as any, {
-      maxSteps: 5,
-      tracingOptions: {
-        metadata: {
-          userId,
-          agentId,
-          conversationId,
-        },
-        tags: [`user:${userId}`, `agent:${agentId}`],
+    const workflow = mastra.getWorkflow('agentChatWorkflow');
+    const run = await workflow.createRun();
+    const workflowStream = run.stream({
+      inputData: {
+        agentKey: ephemeralKey,
+        messages,
+        userId,
+        agentId,
+        threadId: `${userId}:${agentId}`,
       },
     });
 
-    return { output, ephemeralKey };
+    return { workflowStream, ephemeralKey };
   }
 
   cleanupEphemeral(key: string): void {

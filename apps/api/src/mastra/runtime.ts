@@ -1,5 +1,6 @@
 import { Agent } from '@mastra/core/agent';
 import type { ToolsInput } from '@mastra/core/agent';
+import type { Memory } from '@mastra/memory';
 import type { Agent as DbAgent } from '@siestai/db';
 
 /**
@@ -10,6 +11,7 @@ import type { Agent as DbAgent } from '@siestai/db';
 export function createRuntimeAgent(
   record: DbAgent,
   tools?: ToolsInput,
+  memory?: Memory,
 ): Agent {
   return new Agent({
     id: record.id,
@@ -17,5 +19,6 @@ export function createRuntimeAgent(
     instructions: record.instructions,
     model: record.llmModel || 'anthropic/claude-sonnet-4-6',
     ...(tools && Object.keys(tools).length > 0 ? { tools } : {}),
+    ...(memory ? { memory } : {}),
   });
 }
