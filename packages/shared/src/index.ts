@@ -6,7 +6,7 @@ export {
   type AgentFile,
   AGENT_CATEGORIES,
   AGENT_CARD_COLORS,
-} from './types/agent.js';
+} from './types/agent';
 
 export {
   type ArenaAgentConfig,
@@ -20,7 +20,7 @@ export {
   type ArenaInvite,
   type ArenaWsServerMessage,
   type ArenaWsClientMessage,
-} from './types/arena.js';
+} from './types/arena';
 
 export {
   type LiveConnectionState,
@@ -28,9 +28,9 @@ export {
   type AgentState,
   type LiveSessionState,
   type ArenaLiveState,
-} from './types/livekit.js';
+} from './types/livekit';
 
-export { type Tool, type AgentTool } from './types/tool.js';
+export { type Tool, type AgentTool } from './types/tool';
 
 export {
   type HealthResponse,
@@ -39,4 +39,4 @@ export {
   type SessionListResponse,
   type AgentPreviewRequest,
   type ActivityEvent,
-} from './types/api.js';
+} from './types/api';

@@ -12,9 +12,7 @@ COPY apps/web/ ./apps/web/
 # Install deps for web and its workspace dependencies
 RUN pnpm install --frozen-lockfile --filter=@siestai/web...
 
-# Build packages first, then the web app
-RUN pnpm --filter=@siestai/tsconfig build 2>/dev/null; true
-RUN pnpm --filter=@siestai/shared build
+# Build the web app (shared is an internal TS package, no build needed)
 ARG NEXT_PUBLIC_API_URL
 ARG NEXT_PUBLIC_LIVEKIT_URL
 RUN pnpm --filter=@siestai/web build
