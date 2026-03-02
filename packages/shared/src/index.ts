@@ -41,6 +41,7 @@ export {
   type ToolCredentialStatus,
   type ToolSlug,
   TOOL_SLUGS,
+  TOOL_CAPABILITIES,
   type AgentTool,
 } from './types/tool';
 

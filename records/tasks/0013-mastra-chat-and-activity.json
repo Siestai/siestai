@@ -1,0 +1,165 @@
+{
+  "title": "Mastra Chat and Activity",
+  "plan": "records/plans/0013-mastra-chat-and-activity.md",
+  "tasks": [
+    {
+      "id": 1,
+      "phase": 1,
+      "description": "Mastra instance and workflow — PostgresStore, Memory, agentChatWorkflow, observability",
+      "steps": [
+        "Create Mastra instance in apps/api/src/mastra/instance.ts with PostgresStore, default agent, storage",
+        "Add chatMemory (Memory with storage, lastMessages: 20)",
+        "Create agentChatWorkflow in workflows/agent-chat.workflow.ts: single step that gets agent by key, calls agent.stream(messages, memory), pipes fullStream to writer",
+        "Register agentChatWorkflow in Mastra config; add Observability with DefaultExporter"
+      ],
+      "files": [
+        "apps/api/src/mastra/instance.ts",
+        "apps/api/src/mastra/workflows/agent-chat.workflow.ts"
+      ],
+      "verify": "cd apps/api && pnpm build",
+      "done": true
+    },
+    {
+      "id": 2,
+      "phase": 1,
+      "description": "MastraService — bootstrap load agents from DB, register/unregister, ephemeral agents, getWorkflow, getChatMemory",
+      "steps": [
+        "Implement MastraService: OnApplicationBootstrap selects mastra-source agents from DB, registerAgent each via createRuntimeAgent + mastra.addAgent",
+        "Implement registerAgent, unregisterAgent, getAgent; registerEphemeralAgent / unregisterEphemeralAgent for per-request keys",
+        "Expose getChatMemory(), getWorkflow('agentChatWorkflow'), listRegistered()",
+        "Register MastraModule as Global with MastraService"
+      ],
+      "files": [
+        "apps/api/src/mastra/mastra.service.ts",
+        "apps/api/src/mastra/mastra.module.ts"
+      ],
+      "verify": "cd apps/api && pnpm build",
+      "done": true
+    },
+    {
+      "id": 3,
+      "phase": 1,
+      "description": "Runtime agent builder with system prompt, tools, and memory support",
+      "steps": [
+        "Update createRuntimeAgent in apps/api/src/mastra/runtime.ts to accept optional tools (ToolsInput) and memory (Memory)",
+        "Build system prompt from agent name, description, instructions; pass tools and memory into Agent constructor"
+      ],
+      "files": [
+        "apps/api/src/mastra/runtime.ts"
+      ],
+      "verify": "cd apps/api && pnpm build",
+      "done": true
+    },
+    {
+      "id": 4,
+      "phase": 2,
+      "description": "AgentChatService — stream chat via workflow with tools and ephemeral agent",
+      "steps": [
+        "Create AgentChatService: streamChat(agentId, messages, userId) loads agent from AgentsService, builds tools via ToolRegistryService.buildToolsForAgent(agentId, userId)",
+        "Create runtime agent with createRuntimeAgent(record, tools, memory), register ephemeral via MastraService, get agentChatWorkflow, createRun with resourceId userId, run.stream() with inputData (agentKey, messages, userId, agentId, threadId)",
+        "Return workflowStream and ephemeralKey; implement cleanupEphemeral(key)"
+      ],
+      "files": [
+        "apps/api/src/agents/chat/agent-chat.service.ts"
+      ],
+      "verify": "cd apps/api && pnpm build",
+      "done": true
+    },
+    {
+      "id": 5,
+      "phase": 2,
+      "description": "Agent chat controller — POST /agents/:id/chat with AI SDK UI message stream",
+      "steps": [
+        "AgentChatController: POST :id/chat with Body messages, Session user",
+        "Call chatService.streamChat(id, dto.messages, session.user.id); createUIMessageStream with execute that pipes toAISdkStream(workflowStream, { from: 'workflow' }) to writer, then cleanupEphemeral in finally",
+        "pipeUIMessageStreamToResponse(response, uiStream)"
+      ],
+      "files": [
+        "apps/api/src/agents/chat/agent-chat.controller.ts"
+      ],
+      "verify": "cd apps/api && pnpm build",
+      "done": true
+    },
+    {
+      "id": 6,
+      "phase": 2,
+      "description": "ToolRegistryService — userId-aware buildToolsForAgent for per-user credentials",
+      "steps": [
+        "Update buildToolsForAgent(agentId, userId) in tool-registry.service.ts to accept userId and pass to credential/token lookups where needed",
+        "Ensure executeToolAction and tool execute callbacks use userId for OAuth and API key resolution"
+      ],
+      "files": [
+        "apps/api/src/tools/tool-registry.service.ts"
+      ],
+      "verify": "cd apps/api && pnpm build",
+      "done": true
+    },
+    {
+      "id": 7,
+      "phase": 3,
+      "description": "Activity module — in-memory events and GET /activity",
+      "steps": [
+        "Create ActivityService: in-memory Map of userId → ActivityEvent[]; addEvent(userId, { type, agentName, timestamp }), getEvents(userId); cap at 50 events per user",
+        "Create ActivityController: GET /activity returns activityService.getEvents(session.user.id)",
+        "Create ActivityModule; add ActivityModule to AppModule",
+        "Add ActivityEvent type to packages/shared (id, type: agent_created | agent_tested, agentName, timestamp); export from shared index"
+      ],
+      "files": [
+        "apps/api/src/activity/activity.service.ts",
+        "apps/api/src/activity/activity.controller.ts",
+        "apps/api/src/activity/activity.module.ts",
+        "packages/shared/src/types/api.ts",
+        "packages/shared/src/index.ts"
+      ],
+      "verify": "cd apps/api && pnpm build",
+      "done": true
+    },
+    {
+      "id": 8,
+      "phase": 3,
+      "description": "Integrate activity events into agent create and preview test",
+      "steps": [
+        "Inject ActivityService in AgentsService; on createAgent success call activityService.addEvent(userId, { type: 'agent_created', agentName: dto.name, timestamp })",
+        "Inject ActivityService in AgentPreviewService; on stream call activityService.addEvent(userId, { type: 'agent_tested', agentName, timestamp })"
+      ],
+      "files": [
+        "apps/api/src/agents/agents.service.ts",
+        "apps/api/src/agents/preview/agent-preview.service.ts"
+      ],
+      "verify": "cd apps/api && pnpm build",
+      "done": true
+    },
+    {
+      "id": 9,
+      "phase": 4,
+      "description": "Shared tool types — TOOL_CAPABILITIES and ActivityEvent export",
+      "steps": [
+        "Add TOOL_CAPABILITIES record (github, gmail, web_search capability lists) to packages/shared/src/types/tool.ts",
+        "Export ActivityEvent from packages/shared/src/types/api.ts and re-export Tool types and ActivityEvent from packages/shared/src/index.ts"
+      ],
+      "files": [
+        "packages/shared/src/types/tool.ts",
+        "packages/shared/src/index.ts"
+      ],
+      "verify": "cd packages/shared && pnpm build",
+      "done": true
+    },
+    {
+      "id": 10,
+      "phase": 4,
+      "description": "Tools marketplace page — listToolsWithStatus, status badges, ToolDetailDialog",
+      "steps": [
+        "Update apps/web tools page to use api.listToolsWithStatus() for connection status",
+        "Add status badges per tool (Connected / Not Connected / API Key Required / Configured) and category colors",
+        "Add ToolDetailDialog component: tool details, TOOL_CAPABILITIES, OAuth status fetch, connect/disconnect/configure actions",
+        "Wire tool card click to open ToolDetailDialog; pass onConnect, onDisconnect, onConfigureApiKey, isDisconnecting"
+      ],
+      "files": [
+        "apps/web/src/app/(app)/tools/page.tsx",
+        "apps/web/src/components/tools/tool-detail-dialog.tsx"
+      ],
+      "verify": "cd apps/web && pnpm build",
+      "done": true
+    }
+  ]
+}

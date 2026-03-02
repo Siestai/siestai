@@ -29,6 +29,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { ToolDetailDialog } from "@/components/tools/tool-detail-dialog";
 import type { ToolWithStatus } from "@/lib/types";
 
 const TOOL_ICON_MAP: Record<string, LucideIcon> = {
@@ -116,6 +117,9 @@ export default function ToolsPage() {
   const [loading, setLoading] = useState(true);
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
+
+  // Detail dialog state
+  const [selectedTool, setSelectedTool] = useState<ToolWithStatus | null>(null);
 
   // API key config dialog state
   const [apiKeyDialog, setApiKeyDialog] = useState<ToolWithStatus | null>(null);
@@ -256,7 +260,8 @@ export default function ToolsPage() {
             return (
               <div
                 key={tool.id}
-                className="group rounded-xl border border-border bg-card hover:border-muted-foreground/30 transition-colors p-5 flex flex-col gap-3"
+                className="group rounded-xl border border-border bg-card hover:border-muted-foreground/30 transition-colors p-5 flex flex-col gap-3 cursor-pointer"
+                onClick={() => setSelectedTool(tool)}
               >
                 <div className="flex items-start justify-between">
                   <div
@@ -291,7 +296,10 @@ export default function ToolsPage() {
                     <Button
                       variant="outline"
                       size="xs"
-                      onClick={() => handleOAuthConnect(tool.slug)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleOAuthConnect(tool.slug);
+                      }}
                     >
                       <ExternalLink className="h-3 w-3" />
                       Connect
@@ -301,7 +309,10 @@ export default function ToolsPage() {
                     <Button
                       variant="ghost"
                       size="xs"
-                      onClick={() => handleOAuthDisconnect(tool.slug)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleOAuthDisconnect(tool.slug);
+                      }}
                       disabled={isDisconnecting}
                       className="text-muted-foreground hover:text-destructive"
                     >
@@ -317,7 +328,8 @@ export default function ToolsPage() {
                     <Button
                       variant="outline"
                       size="xs"
-                      onClick={() => {
+                      onClick={(e) => {
+                        e.stopPropagation();
                         setApiKeyDialog(tool);
                         setApiKeyValue("");
                       }}
@@ -330,7 +342,8 @@ export default function ToolsPage() {
                     <Button
                       variant="ghost"
                       size="xs"
-                      onClick={() => {
+                      onClick={(e) => {
+                        e.stopPropagation();
                         setApiKeyDialog(tool);
                         setApiKeyValue("");
                       }}
@@ -346,6 +359,41 @@ export default function ToolsPage() {
           })}
         </div>
       )}
+
+      {/* Tool Detail Dialog */}
+      <ToolDetailDialog
+        tool={selectedTool}
+        open={selectedTool !== null}
+        onOpenChange={(open) => {
+          if (!open) setSelectedTool(null);
+        }}
+        icon={
+          selectedTool
+            ? TOOL_ICON_MAP[selectedTool.icon] || Wrench
+            : Wrench
+        }
+        color={
+          selectedTool
+            ? CATEGORY_COLORS[selectedTool.category] || "#6b7280"
+            : "#6b7280"
+        }
+        onConnect={(slug) => {
+          setSelectedTool(null);
+          handleOAuthConnect(slug);
+        }}
+        onDisconnect={async (slug) => {
+          await handleOAuthDisconnect(slug);
+          setSelectedTool((prev) =>
+            prev ? { ...prev, connected: false } : null
+          );
+        }}
+        onConfigureApiKey={(tool) => {
+          setSelectedTool(null);
+          setApiKeyDialog(tool);
+          setApiKeyValue("");
+        }}
+        isDisconnecting={disconnecting === selectedTool?.slug}
+      />
 
       {/* API Key Configuration Dialog */}
       <Dialog

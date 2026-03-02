@@ -1,15 +1,14 @@
 import { Injectable, Logger } from '@nestjs/common';
-import {
-  streamText,
-  stepCountIs,
-  convertToModelMessages,
-  type UIMessage,
-  type StreamTextResult,
-} from 'ai';
-import { createAnthropic } from '@ai-sdk/anthropic';
+import type { UIMessage } from 'ai';
 import { AgentsService } from '../agents.service';
 import { ToolRegistryService } from '../../tools/tool-registry.service';
-import { toAISDKTools } from './tool-adapter';
+import { MastraService } from '../../mastra/mastra.service';
+import { createRuntimeAgent } from '../../mastra/runtime';
+
+export interface ChatStreamResult {
+  workflowStream: AsyncIterable<unknown>;
+  ephemeralKey: string;
+}
 
 @Injectable()
 export class AgentChatService {
@@ -18,41 +17,52 @@ export class AgentChatService {
   constructor(
     private readonly agentsService: AgentsService,
     private readonly toolRegistry: ToolRegistryService,
+    private readonly mastraService: MastraService,
   ) {}
 
   async streamChat(
     agentId: string,
     messages: UIMessage[],
     userId: string,
-  ): Promise<StreamTextResult<any, any>> {
-    const agent = await this.agentsService.getAgent(agentId);
+  ): Promise<ChatStreamResult> {
+    const agentRecord = await this.agentsService.getAgent(agentId);
 
     let tools = {};
     try {
-      const mastraTools = await this.toolRegistry.buildToolsForAgent(
-        agentId,
-        userId,
+      tools = await this.toolRegistry.buildToolsForAgent(agentId, userId);
+      this.logger.log(
+        `Built ${Object.keys(tools).length} tools for agent ${agentId}: [${Object.keys(tools).join(', ')}]`,
       );
-      tools = toAISDKTools(mastraTools);
     } catch (err) {
       this.logger.warn(
         `Failed to build tools for agent ${agentId}: ${err}`,
       );
     }
 
-    const modelId = (agent.llmModel || 'anthropic/claude-sonnet-4-6').replace(
-      'anthropic/',
-      '',
-    );
-    const anthropic = createAnthropic();
-    const model = anthropic(modelId);
+    const memory = this.mastraService.getChatMemory();
+    const agent = createRuntimeAgent(agentRecord as any, tools, memory);
+    const ephemeralKey = this.mastraService.registerEphemeralAgent(agent);
 
-    return streamText({
-      model,
-      system: agent.instructions,
-      messages: await convertToModelMessages(messages),
-      tools,
-      stopWhen: stepCountIs(5),
+    const threadId = `${userId}:${agentId}`;
+    const workflow = this.mastraService.getWorkflow('agentChatWorkflow');
+    const run = await workflow.createRun({
+      resourceId: userId,
+      runId: `${agentRecord.name}:${threadId}:${Date.now()}`,
     });
+    const workflowStream = run.stream({
+      inputData: {
+        agentKey: ephemeralKey,
+        messages: messages as unknown[],
+        userId,
+        agentId,
+        threadId,
+      },
+    });
+
+    return { workflowStream, ephemeralKey };
+  }
+
+  cleanupEphemeral(key: string): void {
+    this.mastraService.unregisterEphemeralAgent(key);
   }
 }
