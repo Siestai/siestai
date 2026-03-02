@@ -7,8 +7,8 @@ import {
   jsonb,
   unique,
 } from 'drizzle-orm/pg-core';
-import { agents } from './agents';
-import { arenaSessions } from './arena';
+import { agents } from './agents.js';
+import { arenaSessions } from './arena.js';
 
 export const agentMemories = pgTable('agent_memories', {
   id: uuid('id').primaryKey().defaultRandom(),
