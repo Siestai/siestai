@@ -13,7 +13,13 @@ const defaultAgent = new Agent({
   model: 'anthropic/claude-sonnet-4-6',
 });
 
+const storage = new PostgresStore({
+  id: 'siestai-storage',
+  connectionString: process.env.DATABASE_URL!,
+});
+
 export const chatMemory = new Memory({
+  storage,
   options: {
     lastMessages: 20,
   },
@@ -29,10 +35,7 @@ export const mastra = new Mastra({
   server: {
     port: 4111,
   },
-  storage: new PostgresStore({
-    id: 'siestai-storage',
-    connectionString: process.env.DATABASE_URL!,
-  }),
+  storage,
   observability: new Observability({
     configs: {
       default: {

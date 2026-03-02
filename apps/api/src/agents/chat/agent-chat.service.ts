@@ -42,15 +42,19 @@ export class AgentChatService {
     const agent = createRuntimeAgent(agentRecord as any, tools, chatMemory);
     const ephemeralKey = this.mastraService.registerEphemeralAgent(agent);
 
+    const threadId = `${userId}:${agentId}`;
     const workflow = mastra.getWorkflow('agentChatWorkflow');
-    const run = await workflow.createRun();
+    const run = await workflow.createRun({
+      resourceId: userId,
+      runId: `${agentRecord.name}:${threadId}:${Date.now()}`,
+    });
     const workflowStream = run.stream({
       inputData: {
         agentKey: ephemeralKey,
         messages,
         userId,
         agentId,
-        threadId: `${userId}:${agentId}`,
+        threadId,
       },
     });
 
