@@ -6,6 +6,11 @@
       "sourceType": "github",
       "computedHash": "39eaa7216d358c36e55b37c90a1dda916a891e6b294faa28d17e3511510b82d6"
     },
+    "ai-sdk": {
+      "source": "vercel/ai",
+      "sourceType": "github",
+      "computedHash": "58ce68f628890c3925aea2b5435a649251ac182057541045c68fc19a27aaa0ec"
+    },
     "better-auth-best-practices": {
       "source": "better-auth/skills",
       "sourceType": "github",

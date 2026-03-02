@@ -7,6 +7,7 @@ import {
   Bot,
   ChevronLeft,
   MessageSquare,
+  Mic,
   Users,
   Loader2,
 } from "lucide-react";
@@ -20,6 +21,7 @@ import { ToolsSection } from "@/components/agents/detail/tools-section";
 import { SkillsSection } from "@/components/agents/detail/skills-section";
 import { SettingsSection } from "@/components/agents/detail/settings-section";
 import { AgentMemories } from "@/components/agents/agent-memories";
+import { ChatPanel } from "@/components/agents/chat/chat-panel";
 import { api } from "@/lib/api";
 import type { AgentFile } from "@/lib/types";
 
@@ -33,6 +35,7 @@ export default function AgentDetailPage({
   const { agent, loading, saveStatus, updateField, updateFields, saveNow } =
     useAgentEditor(id);
   const [files, setFiles] = useState<AgentFile[]>([]);
+  const [chatOpen, setChatOpen] = useState(false);
 
   useEffect(() => {
     api.listAgentFiles(id).then(setFiles).catch(() => {});
@@ -59,86 +62,119 @@ export default function AgentDetailPage({
   }
 
   return (
-    <div className="mx-auto max-w-2xl px-6 py-8 space-y-8">
-      {/* Top bar */}
-      <div className="flex items-center justify-between">
-        <Link
-          href="/agents"
-          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
-        >
-          <ChevronLeft className="h-4 w-4" />
-          Agents
-        </Link>
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-1.5"
-            onClick={() => router.push(`/arena?agent_ids=${agent.id}`)}
+    <>
+      <div className="px-6 py-8 max-w-3xl mx-auto space-y-8">
+        {/* Top bar */}
+        <div className="flex items-center justify-between">
+          <Link
+            href="/agents"
+            className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
           >
-            <Users className="h-3.5 w-3.5" />
-            Arena
-          </Button>
-          <Button
-            size="sm"
-            className="gap-1.5"
-            onClick={() =>
-              router.push(
-                `/live?agent_id=${agent.id}&agent_name=${encodeURIComponent(agent.name)}`
-              )
-            }
-          >
-            <MessageSquare className="h-3.5 w-3.5" />
-            Chat
-          </Button>
+            <ChevronLeft className="h-4 w-4" />
+            Agents
+          </Link>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5"
+              onClick={() => router.push(`/arena?agent_ids=${agent.id}`)}
+            >
+              <Users className="h-3.5 w-3.5" />
+              Arena
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5"
+              onClick={() =>
+                router.push(
+                  `/live?agent_id=${agent.id}&agent_name=${encodeURIComponent(agent.name)}`
+                )
+              }
+            >
+              <Mic className="h-3.5 w-3.5" />
+              Voice
+            </Button>
+            <Button
+              variant={chatOpen ? "default" : "outline"}
+              size="sm"
+              className="gap-1.5"
+              onClick={() => setChatOpen(!chatOpen)}
+            >
+              <MessageSquare className="h-3.5 w-3.5" />
+              Chat
+            </Button>
+          </div>
+        </div>
+
+        {/* Header: avatar + name + description */}
+        <AgentHeader
+          agent={agent}
+          onUpdate={updateField}
+          onUpdateMultiple={updateFields}
+        />
+
+        {/* Divider sections */}
+        <div className="space-y-8 divide-y divide-border [&>*:not(:first-child)]:pt-8">
+          {/* System Prompt */}
+          <InstructionsSection
+            instructions={agent.instructions}
+            saveStatus={saveStatus}
+            onUpdate={(value) => updateField("instructions", value)}
+            onBlur={saveNow}
+          />
+
+          {/* Model */}
+          <ModelSection
+            model={agent.llmModel}
+            onUpdate={(value) => updateField("llmModel", value)}
+          />
+
+          {/* Knowledge / Files */}
+          <FilesSection
+            agentId={agent.id}
+            files={files}
+            onFilesChange={setFiles}
+          />
+
+          {/* Tools */}
+          <ToolsSection agentId={agent.id} />
+
+          {/* Skills */}
+          <SkillsSection
+            currentInstructions={agent.instructions}
+            onApply={(updates) => updateFields(updates)}
+          />
+
+          {/* Memory */}
+          <AgentMemories agentId={agent.id} />
+
+          {/* Settings + Danger Zone */}
+          <SettingsSection agent={agent} onUpdate={updateField} />
         </div>
       </div>
 
-      {/* Header: avatar + name + description */}
-      <AgentHeader
-        agent={agent}
-        onUpdate={updateField}
-        onUpdateMultiple={updateFields}
-      />
-
-      {/* Divider sections */}
-      <div className="space-y-8 divide-y divide-border [&>*:not(:first-child)]:pt-8">
-        {/* System Prompt */}
-        <InstructionsSection
-          instructions={agent.instructions}
-          saveStatus={saveStatus}
-          onUpdate={(value) => updateField("instructions", value)}
-          onBlur={saveNow}
+      {/* Backdrop overlay (mobile & desktop) */}
+      {chatOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-background/60 backdrop-blur-sm md:hidden"
+          onClick={() => setChatOpen(false)}
         />
+      )}
 
-        {/* Model */}
-        <ModelSection
-          model={agent.llmModel}
-          onUpdate={(value) => updateField("llmModel", value)}
+      {/* Right sidebar chat panel */}
+      <aside
+        className={`fixed top-0 right-0 z-50 h-full w-full max-w-[420px] border-l border-border bg-background shadow-2xl transition-transform duration-300 ease-in-out ${
+          chatOpen ? "translate-x-0" : "translate-x-full"
+        }`}
+      >
+        <ChatPanel
+          agentId={id}
+          agentName={agent.name}
+          onClose={() => setChatOpen(false)}
         />
-
-        {/* Knowledge / Files */}
-        <FilesSection
-          agentId={agent.id}
-          files={files}
-          onFilesChange={setFiles}
-        />
-
-        {/* Tools */}
-        <ToolsSection agentId={agent.id} />
-
-        {/* Skills */}
-        <SkillsSection
-          currentInstructions={agent.instructions}
-          onApply={(updates) => updateFields(updates)}
-        />
-
-        {/* Memory */}
-        <AgentMemories agentId={agent.id} />
-
-        {/* Settings + Danger Zone */}
-        <SettingsSection agent={agent} onUpdate={updateField} />
-      </div>
-    </div>
+      </aside>
+    </>
   );
 }
