@@ -1,35 +1,57 @@
 # Siestai
 
-> Requires: **Node.js >= 22**, **pnpm**, **Docker**
+> Requires: **Node.js >= 22**, **pnpm 10+**, **Docker**
 
 ## Setup
 
 ```bash
 nvm use 22
-make setup
+pnpm install
+cp .env.example .env.local
 ```
 
-Edit your API keys in the generated `.env` files:
-- `mastra/.env` — set `OPENAI_API_KEY`
-- `backend/.env` — set `LIVEKIT_*` credentials
+Edit `.env.local` and fill in your keys (`OPENAI_API_KEY`, `LIVEKIT_*`, `GOOGLE_CLIENT_*`).
+
+Start the database and run migrations:
+
+```bash
+pnpm dev:db
+pnpm db:setup
+```
 
 ## Run
 
 ```bash
-make dev
+pnpm dev
 ```
 
 Open **http://localhost:3000**
 
-Press `Ctrl+C` to stop.
+Run a single app:
+
+```bash
+pnpm dev:web     # frontend only
+pnpm dev:api     # backend only
+pnpm dev:agent   # voice agent only
+```
 
 ## Other commands
 
 ```
-make stop       # stop everything
-make db-reset   # wipe and recreate database
-make test       # run all tests
-make clean      # remove node_modules
-make nuke       # full reset (stop + clean + wipe db)
-make help       # list all commands
+pnpm build       # build all packages and apps
+pnpm test        # run all tests
+pnpm lint        # lint all packages
+pnpm stop:db     # stop postgres
+pnpm db:reset    # wipe and recreate database
+pnpm clean       # remove build artifacts
+```
+
+## Project structure
+
+```
+apps/web/        # Next.js frontend (:3000)
+apps/api/        # NestJS backend  (:4200)
+apps/agent/      # LiveKit voice agent
+packages/db/     # Drizzle schema, migrations, seed
+packages/shared/ # Shared TypeScript types
 ```
