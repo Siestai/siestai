@@ -10,6 +10,7 @@ import { Agent } from './agent.js';
 import { ArenaAgent, type ArenaMetadata, buildArenaGreeting } from './arena-agent.js';
 import { MultiVoiceTTS } from './multi-voice-tts.js';
 import { DIRECT_PROVIDER_CONFIG } from './provider-config.js';
+import { ToolExecutor } from './tool-executor.js';
 
 dotenv.config({ path: '.env.local' });
 
@@ -180,6 +181,65 @@ function setupDataChannelListener(
         'Failed to inject external agent message',
       );
     }
+  });
+}
+
+/**
+ * Detect [TOOL_CALL] patterns in assistant output, execute the tool
+ * via the backend HTTP proxy, and inject the result back into the conversation.
+ *
+ * Pattern: [TOOL_CALL] slug: <slug>, action: <action>, params: <json>
+ */
+function setupToolCallHandler(
+  session: voice.AgentSession,
+  toolExecutor: ToolExecutor,
+): void {
+  const toolCallRegex =
+    /\[TOOL_CALL\]\s*slug:\s*(\S+),\s*action:\s*(\S+),\s*params:\s*(\{.*\})/;
+
+  session.on(voice.AgentSessionEventTypes.ConversationItemAdded, (ev) => {
+    if (ev.item.role !== 'assistant') return;
+
+    const text = ev.item.textContent ?? '';
+    const match = text.match(toolCallRegex);
+    if (!match) return;
+
+    const slug = match[1];
+    const action = match[2];
+    let params: Record<string, unknown>;
+    try {
+      params = JSON.parse(match[3]);
+    } catch {
+      log().warn(
+        { slug, action, raw: match[3] },
+        'Failed to parse tool call params as JSON',
+      );
+      return;
+    }
+
+    log().info({ slug, action }, 'Detected tool call in assistant output — executing');
+
+    // Fire-and-forget: execute tool and inject result
+    toolExecutor
+      .execute(slug, action, params)
+      .then((result) => {
+        try {
+          session.generateReply({
+            userInput: `[TOOL_RESULT] Tool: ${slug}, Result: ${result}`,
+          });
+        } catch (err) {
+          log().warn(
+            { error: err instanceof Error ? err.message : String(err), slug },
+            'Failed to inject tool result into conversation',
+          );
+        }
+      })
+      .catch((err) => {
+        log().warn(
+          { error: err instanceof Error ? err.message : String(err), slug },
+          'Tool execution promise rejected',
+        );
+      });
   });
 }
 
@@ -599,6 +659,22 @@ export default defineAgent({
     // Bridge: listen for external agent messages via data channel (WS → LiveKit)
     setupDataChannelListener(ctx.room, session);
     logger.info('Data channel listener for external agents enabled');
+
+    // Tool execution: detect [TOOL_CALL] in assistant output and proxy to backend
+    const hasTools = arenaMetadata.agents.some((a) => a.tools && a.tools.length > 0);
+    if (hasTools && arenaMetadata.backendUrl && arenaMetadata.toolSecret) {
+      const toolExecutor = new ToolExecutor(
+        arenaMetadata.backendUrl,
+        arenaMetadata.toolSecret,
+      );
+      setupToolCallHandler(session, toolExecutor);
+      logger.info(
+        { toolCount: arenaMetadata.agents.reduce((n, a) => n + (a.tools?.length ?? 0), 0) },
+        'Tool call handler enabled',
+      );
+    } else if (hasTools) {
+      logger.warn('Agents have tools but missing backendUrl or toolSecret — tool execution disabled');
+    }
 
     // Agent-only mode: wait for participant then kick off conversation
     if (isAgentOnly) {
