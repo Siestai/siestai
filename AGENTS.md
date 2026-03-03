@@ -270,7 +270,7 @@ Staging is live at **https://staging.siestai.com**. See [`docs/STAGING-SETUP.md`
 # First-time setup
 pnpm install              # Install all workspace dependencies
 pnpm dev:db               # Start PostgreSQL (deploy/docker-compose.dev.yml)
-pnpm db:setup             # Run migrations
+pnpm db:setup             # Run migrations + seed
 
 # Development
 pnpm dev                  # Start all services via turbo (web + api + agent)

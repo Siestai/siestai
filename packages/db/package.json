@@ -12,17 +12,19 @@
     "build": "tsc",
     "generate": "drizzle-kit generate",
     "migrate": "drizzle-kit migrate",
+    "db:migrate": "dotenv -e ../../.env.local -- drizzle-kit migrate",
     "db:seed": "tsx src/seed.ts",
     "db:setup": "pnpm migrate"
   },
   "dependencies": {
+    "dotenv": "^16.5.0",
     "drizzle-orm": "^0.39.3",
-    "pg": "^8.16.0",
-    "dotenv": "^16.5.0"
+    "pg": "^8.16.0"
   },
   "devDependencies": {
     "@siestai/tsconfig": "workspace:*",
     "@types/pg": "^8.15.4",
+    "dotenv-cli": "^11.0.0",
     "drizzle-kit": "^0.31.1",
     "tsx": "^4.19.4",
     "typescript": "^5.8.3"

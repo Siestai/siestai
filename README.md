@@ -16,7 +16,7 @@ Start the database, run migrations, then launch all services:
 
 ```bash
 pnpm dev:db          # start postgres container
-pnpm db:setup        # run migrations
+pnpm db:setup        # run migrations + seed
 pnpm dev             # start all apps via turbo
 ```
 
@@ -42,7 +42,7 @@ Schema files are in `packages/db/src/schema/`. Each domain has its own file (age
 
 ```bash
 pnpm db:migrate      # apply pending migrations
-pnpm db:setup        # shorthand for db:migrate
+pnpm db:setup        # run migrations + seed data
 ```
 
 ### Creating a new migration
