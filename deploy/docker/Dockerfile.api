@@ -27,8 +27,7 @@ COPY --from=build /app/apps/api/package.json ./apps/api/
 RUN pnpm install --frozen-lockfile --filter=@siestai/api... --prod
 
 COPY --from=build /app/apps/api/dist ./apps/api/dist
-COPY --from=build /app/apps/api/migrate-auth.mjs ./apps/api/migrate-auth.mjs
 
 WORKDIR /app/apps/api
 EXPOSE 4200
-CMD ["sh", "-c", "node migrate-auth.mjs && node dist/main"]
+CMD ["sh", "-c", "node -e \"import('@siestai/db/migrate')\" && node dist/main"]
