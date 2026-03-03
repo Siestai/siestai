@@ -133,6 +133,7 @@ export class ArenaController {
   @HttpCode(204)
   async endSession(@Param('id') id: string): Promise<void> {
     await this.arenaService.endSession(id);
+    this.arenaGateway.broadcastSessionEnded(id);
   }
 
   @Get('sessions/:id/brief')

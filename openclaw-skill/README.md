@@ -73,6 +73,7 @@ The agent communicates via a simple JSON text protocol:
 {"type": "welcome", "sessionId": "...", "participants": [...]}
 {"type": "transcript", "speaker": "Human", "text": "...", "timestamp": 1234567890}
 {"type": "agent_message", "speaker": "Atlas", "text": "...", "timestamp": 1234567890}
+{"type": "system", "event": "session_started", "roomName": "..."}
 {"type": "system", "event": "participant_joined", "participant": {...}}
 {"type": "session_ended"}
 ```

@@ -283,6 +283,16 @@ export class ArenaGateway
     });
   }
 
+  broadcastSessionEnded(sessionId: string): void {
+    const data = JSON.stringify({ type: 'session_ended' });
+    for (const [ws, info] of this.clients) {
+      if (info.sessionId === sessionId && ws.readyState === WebSocket.OPEN) {
+        ws.send(data);
+        ws.close();
+      }
+    }
+  }
+
   private broadcastToSession(
     sessionId: string,
     message: Record<string, unknown>,

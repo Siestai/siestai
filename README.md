@@ -30,6 +30,15 @@ pnpm dev:api         # NestJS backend    (:4200)
 pnpm dev:agent       # LiveKit voice agent
 ```
 
+## Mastra Studio
+
+To run the Mastra Studio for developing and inspecting workflows, start it from the API app:
+
+```bash
+cd apps/api
+npx mastra dev --dir src/mastra
+```
+
 ## Database & migrations
 
 The database lives in `packages/db/` and uses **Drizzle ORM** with **PostgreSQL 16** (pgvector).
