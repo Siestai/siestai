@@ -14,7 +14,8 @@
     "migrate": "drizzle-kit migrate",
     "db:migrate": "dotenv -e ../../.env.local -- drizzle-kit migrate",
     "db:seed": "tsx src/seed.ts",
-    "db:setup": "pnpm migrate"
+    "db:setup": "pnpm migrate",
+    "db:studio": "dotenv -e ../../.env.local -- drizzle-kit studio"
   },
   "dependencies": {
     "dotenv": "^16.5.0",
