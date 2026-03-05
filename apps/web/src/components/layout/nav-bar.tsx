@@ -8,6 +8,7 @@ import {
   Bot,
   Network as ArenaIcon,
   Phone,
+  Users,
   Wrench,
   Settings,
   Menu,
@@ -24,6 +25,7 @@ const navItems = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/agents", label: "Agents", icon: Bot },
   { href: "/arena", label: "Arena", icon: ArenaIcon },
+  { href: "/teams", label: "Teams", icon: Users },
   { href: "/live", label: "Live", icon: Phone },
   { href: "/tools", label: "Tools", icon: Wrench },
 ];
