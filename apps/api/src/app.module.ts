@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { ScheduleModule } from '@nestjs/schedule';
 import { AuthModule } from '@thallesp/nestjs-better-auth';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -12,11 +13,14 @@ import { AgentFilesModule } from './agents/files/agent-files.module';
 import { ActivityModule } from './activity/activity.module';
 import { ToolsModule } from './tools/tools.module';
 import { MastraModule } from './mastra/mastra.module';
+import { MemoryModule } from './memory/memory.module';
+import { TeamsModule } from './teams/teams.module';
 import { auth } from './auth/auth';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    ScheduleModule.forRoot(),
     AuthModule.forRoot({
       auth,
       middleware: (req, _res, next) => {
@@ -26,8 +30,10 @@ import { auth } from './auth/auth';
       },
     }),
     MastraModule,
+    MemoryModule,
     LivekitModule,
     ArenaModule,
+    TeamsModule,
     AgentsModule,
     AgentPreviewModule,
     AgentChatModule,

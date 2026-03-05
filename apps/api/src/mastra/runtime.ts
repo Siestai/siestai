@@ -7,8 +7,15 @@ import type { Agent as DbAgent } from '@siestai/db';
  * Build a system prompt from the agent's identity, description, and instructions.
  * Tools are not listed here — they are passed via the `tools` config and
  * surfaced to the model through the tool-calling API automatically.
+ *
+ * If `assembledContext` is provided (from ContextAssemblyService), it replaces
+ * the default prompt with the full memory-aware context.
  */
-function buildSystemPrompt(record: DbAgent): string {
+function buildSystemPrompt(record: DbAgent, assembledContext?: string): string {
+  if (assembledContext) {
+    return `You are "${record.name}".\n\n${assembledContext}`;
+  }
+
   const parts: string[] = [];
 
   parts.push(`You are "${record.name}".`);
@@ -33,8 +40,9 @@ export function createRuntimeAgent(
   record: DbAgent,
   tools?: ToolsInput,
   memory?: Memory,
+  assembledContext?: string,
 ): Agent {
-  const instructions = buildSystemPrompt(record);
+  const instructions = buildSystemPrompt(record, assembledContext);
 
   return new Agent({
     id: record.id,

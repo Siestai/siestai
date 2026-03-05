@@ -83,6 +83,18 @@ export class MastraService implements OnApplicationBootstrap {
     this.logger.debug(`Unregistered ephemeral agent ${key}`);
   }
 
+  /**
+   * Create a runtime agent with pre-assembled context from the memory system.
+   */
+  createContextualAgent(
+    record: AgentRow & { description?: string },
+    assembledContext: string,
+    tools?: Record<string, unknown>,
+    memory?: Memory,
+  ): Agent {
+    return createRuntimeAgent(record as any, tools as any, memory, assembledContext);
+  }
+
   getChatMemory(): Memory {
     return chatMemory;
   }

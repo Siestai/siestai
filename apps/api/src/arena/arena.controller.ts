@@ -52,7 +52,7 @@ export class ArenaController {
           let formatted = memories
             .map(
               (m) =>
-                `- [${m.category}] ${m.content}`,
+                `- [${m.memoryType}] ${m.content}`,
             )
             .join('\n');
           if (formatted.length > 500) {

@@ -44,6 +44,8 @@ export class MemoryExtractionService {
     agentName: string,
     transcriptText: string,
   ): Promise<ExtractedMemory[]> {
+    const t0 = Date.now();
+    this.logger.log(`[llm] extractAgentMemories("${agentName}") calling ${EXTRACTION_MODEL}...`);
     const response = await this.client.messages.create({
       model: EXTRACTION_MODEL,
       max_tokens: 1024,
@@ -61,6 +63,7 @@ Focus on what is most relevant for agent "${agentName}" to recall in future sess
       ],
     });
 
+    this.logger.log(`[llm] extractAgentMemories("${agentName}") returned in ${((Date.now() - t0) / 1000).toFixed(1)}s (usage: ${response.usage?.input_tokens}in/${response.usage?.output_tokens}out)`);
     const text =
       response.content[0].type === 'text' ? response.content[0].text : '';
     return this.parseJsonArray<ExtractedMemory>(text);
@@ -70,6 +73,8 @@ Focus on what is most relevant for agent "${agentName}" to recall in future sess
     transcriptText: string,
     agentNames: string[],
   ): Promise<ExtractedBrief> {
+    const t0 = Date.now();
+    this.logger.log(`[llm] extractSessionBrief() calling ${EXTRACTION_MODEL}...`);
     const response = await this.client.messages.create({
       model: EXTRACTION_MODEL,
       max_tokens: 1024,
@@ -88,6 +93,7 @@ Participants: ${agentNames.join(', ')}. If the transcript is too short, return e
       ],
     });
 
+    this.logger.log(`[llm] extractSessionBrief() returned in ${((Date.now() - t0) / 1000).toFixed(1)}s (usage: ${response.usage?.input_tokens}in/${response.usage?.output_tokens}out)`);
     const text =
       response.content[0].type === 'text' ? response.content[0].text : '';
     return this.parseJsonObject<ExtractedBrief>(text, {
