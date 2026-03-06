@@ -47,6 +47,9 @@ CREATE TABLE IF NOT EXISTS "team_md_files" (
 -- Add teamId to arena_sessions
 ALTER TABLE "arena_sessions" ADD COLUMN IF NOT EXISTS "team_id" uuid REFERENCES "teams"("id") ON DELETE SET NULL;--> statement-breakpoint
 
+-- Drop old agent_memories (from migration 0003, incompatible schema)
+DROP TABLE IF EXISTS "agent_memories";--> statement-breakpoint
+
 -- New agent_memories (vector-backed)
 CREATE TABLE IF NOT EXISTS "agent_memories" (
   "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
@@ -109,6 +112,9 @@ CREATE TABLE IF NOT EXISTS "daily_memory_files" (
 );--> statement-breakpoint
 
 CREATE INDEX IF NOT EXISTS "daily_memory_files_scope_idx" ON "daily_memory_files" ("scope_type", "scope_id");--> statement-breakpoint
+
+-- Drop old arena_session_briefs (from migration 0003, recreate with inline FK)
+DROP TABLE IF EXISTS "arena_session_briefs";--> statement-breakpoint
 
 -- Arena session briefs
 CREATE TABLE IF NOT EXISTS "arena_session_briefs" (
