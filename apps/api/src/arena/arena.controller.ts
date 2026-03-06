@@ -8,6 +8,7 @@ import { ArenaGateway } from './arena.gateway';
 import { AgentsService } from '../agents/agents.service';
 import { ToolsService } from '../tools/tools.service';
 import { MemoryService } from '../memory/memory.service';
+import { TeamsService } from '../teams/teams.service';
 import { CreateArenaSessionDto } from './dto/create-arena-session.dto';
 import { ListArenaSessionsDto } from './dto/list-arena-sessions.dto';
 import { JoinArenaDto } from './dto/join-arena.dto';
@@ -23,6 +24,7 @@ export class ArenaController {
     private readonly agentsService: AgentsService,
     private readonly toolsService: ToolsService,
     private readonly memoryService: MemoryService,
+    private readonly teamsService: TeamsService,
   ) {}
 
   @Post('sessions')
@@ -58,13 +60,19 @@ export class ArenaController {
     const session = await this.arenaService.getSession(id);
     await this.arenaService.validateCanStart(id);
 
-    // Load agent memories and tool definitions for each native_agent participant with an agentId
+    // Load agent memories, tool definitions, and team memberships for each native_agent participant
     const agentMemories = new Map<string, string>();
     const agentToolDefs = new Map<string, { slug: string; name: string; description: string }[]>();
+    const agentTeamNames = new Map<string, string[]>();
     const participantRows =
       await this.arenaService.getSessionParticipantRows(id);
     for (const p of participantRows) {
       if (p.type === 'native_agent' && p.agentId) {
+        // Fetch team memberships for this agent
+        const teamNames = await this.teamsService.getAgentTeamNames(p.agentId);
+        if (teamNames.length > 0) {
+          agentTeamNames.set(p.name, teamNames);
+        }
         // Use vector search with session topic for relevance-ranked memories
         const searchQuery = session.topic || p.name;
         const memories = await this.memoryService.searchAgentMemories(
@@ -73,13 +81,13 @@ export class ArenaController {
           10,
         );
         if (memories.length > 0) {
-          // Drop whole items to stay under 500 chars — never slice mid-sentence
+          // Drop whole items to stay under 1500 chars — never slice mid-sentence
           const items = memories.map(
             (m: any) => `- [${m.memory_type}|${m.importance > 0.6 ? 'high' : m.importance > 0.3 ? 'medium' : 'low'}] ${m.content}`,
           );
           let formatted = '';
           for (const item of items) {
-            if ((formatted + '\n' + item).length > 500) break;
+            if ((formatted + '\n' + item).length > 1500) break;
             formatted += (formatted ? '\n' : '') + item;
           }
           if (formatted) {
@@ -102,10 +110,47 @@ export class ArenaController {
       }
     }
 
+    // Load previous session briefs for continuity
+    const agentIds = participantRows
+      .filter((p) => p.type === 'native_agent' && p.agentId)
+      .map((p) => p.agentId!);
+    const previousBriefs = await this.arenaService.getPreviousSessionBriefs(
+      id,
+      session.teamId,
+      agentIds,
+    );
+
+    let sessionContinuity: string | undefined;
+    if (previousBriefs.length > 0) {
+      const parts: string[] = [];
+      previousBriefs.forEach((prev, idx) => {
+        const date = prev.endedAt ? new Date(prev.endedAt).toLocaleDateString() : 'unknown date';
+        if (idx === 0) {
+          // Most recent: full detail
+          parts.push(`Most recent session (${date}) — "${prev.topic}":`);
+          const decisions = prev.brief.decisions.slice(0, 3).map((d: any) => d.text || d).filter(Boolean);
+          if (decisions.length > 0) parts.push(`  Decisions: ${decisions.join('; ')}`);
+          const unresolved = prev.brief.unresolved.slice(0, 3).map((u: any) => u.topic || u).filter(Boolean);
+          if (unresolved.length > 0) parts.push(`  Unresolved: ${unresolved.join('; ')}`);
+          const questions = prev.brief.nextSessionQuestions.slice(0, 3);
+          if (questions.length > 0) parts.push(`  Questions for next session: ${questions.join('; ')}`);
+        } else {
+          // Older sessions: brief summary
+          const decisions = prev.brief.decisions.slice(0, 2).map((d: any) => d.text || d).filter(Boolean);
+          parts.push(`Earlier session (${date}) — "${prev.topic}": ${decisions.length > 0 ? `Decided: ${decisions.join('; ')}` : 'No key decisions recorded'}`);
+        }
+      });
+      const continuityText = parts.join('\n');
+      // Cap at ~2000 chars
+      sessionContinuity = continuityText.length > 2000 ? continuityText.substring(0, 1997) + '...' : continuityText;
+    }
+
     const result = await this.livekitService.generateArenaToken(
       session,
       agentMemories.size > 0 ? agentMemories : undefined,
       agentToolDefs.size > 0 ? agentToolDefs : undefined,
+      sessionContinuity,
+      agentTeamNames.size > 0 ? agentTeamNames : undefined,
     );
     await this.arenaService.startSession(id, result.roomName);
     this.arenaGateway.broadcastSessionStarted(id, result.roomName);

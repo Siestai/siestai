@@ -93,6 +93,15 @@ export class TeamsService {
     return { ok: true };
   }
 
+  async getAgentTeamNames(agentId: string): Promise<string[]> {
+    const rows = await db
+      .select({ name: teams.name })
+      .from(teamAgents)
+      .innerJoin(teams, eq(teamAgents.teamId, teams.id))
+      .where(eq(teamAgents.agentId, agentId));
+    return rows.map((r) => r.name);
+  }
+
   async getTeamAgents(teamId: string) {
     return db
       .select({
