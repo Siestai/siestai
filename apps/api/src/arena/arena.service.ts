@@ -26,12 +26,22 @@ import {
   arenaTranscripts,
   agentMemories,
   arenaSessionBriefs,
+  teams,
   eq,
   and,
   desc,
+  asc,
+  ilike,
+  gte,
+  lte,
+  count,
+  inArray,
+  sql,
   type ArenaSessionRow,
   type ArenaSessionParticipantRow,
 } from '@siestai/db';
+import type { ArenaSessionSummary, PaginatedArenaSessions } from '@siestai/shared';
+import { ListArenaSessionsDto } from './dto/list-arena-sessions.dto';
 
 const AGENT_COLORS = [
   '#3b82f6',
@@ -89,21 +99,45 @@ export class ArenaService {
       .returning();
 
     const nativeAgents = dto.nativeAgents || [];
-    let participantRows: ArenaSessionParticipantRow[] = [];
+    const participantValues: {
+      sessionId: string;
+      agentId: string | null;
+      name: string;
+      type: string;
+      instructions: string | null;
+      color: string;
+    }[] = [];
 
-    if (nativeAgents.length > 0) {
+    // Add human host as participant in human_collab mode
+    if (dto.participationMode !== 'agent_only') {
+      participantValues.push({
+        sessionId: sessionRow.id,
+        agentId: null,
+        name: 'You',
+        type: 'human',
+        instructions: null,
+        color: '#ffffff',
+      });
+    }
+
+    // Add native agents
+    for (let i = 0; i < nativeAgents.length; i++) {
+      const agent = nativeAgents[i];
+      participantValues.push({
+        sessionId: sessionRow.id,
+        agentId: agent.agentId ?? null,
+        name: agent.name,
+        type: 'native_agent',
+        instructions: agent.instructions ?? null,
+        color: AGENT_COLORS[i % AGENT_COLORS.length],
+      });
+    }
+
+    let participantRows: ArenaSessionParticipantRow[] = [];
+    if (participantValues.length > 0) {
       participantRows = await db
         .insert(arenaSessionParticipants)
-        .values(
-          nativeAgents.map((agent, i) => ({
-            sessionId: sessionRow.id,
-            agentId: agent.agentId ?? null,
-            name: agent.name,
-            type: 'native_agent',
-            instructions: agent.instructions ?? null,
-            color: AGENT_COLORS[i % AGENT_COLORS.length],
-          })),
-        )
+        .values(participantValues)
         .returning();
     }
 
@@ -137,12 +171,23 @@ export class ArenaService {
       throw new NotFoundException(`Arena session ${id} not found`);
     }
 
-    const participantRows = await db
-      .select()
-      .from(arenaSessionParticipants)
-      .where(eq(arenaSessionParticipants.sessionId, id));
+    const sessionRow = sessionRows[0];
 
-    const session = this.mapToSession(sessionRows[0], participantRows);
+    const [participantRows, teamName] = await Promise.all([
+      db
+        .select()
+        .from(arenaSessionParticipants)
+        .where(eq(arenaSessionParticipants.sessionId, id)),
+      sessionRow.teamId
+        ? db
+            .select({ name: teams.name })
+            .from(teams)
+            .where(eq(teams.id, sessionRow.teamId))
+            .then((rows) => rows[0]?.name)
+        : Promise.resolve(undefined),
+    ]);
+
+    const session = this.mapToSession(sessionRow, participantRows, teamName);
     this.sessionCache.set(id, { session, cachedAt: Date.now() });
 
     return session;
@@ -529,6 +574,116 @@ export class ArenaService {
     await Promise.all(writes);
   }
 
+  // ─── List / History Methods ──────────────────────────────────────
+
+  async listSessions(dto: ListArenaSessionsDto): Promise<PaginatedArenaSessions> {
+    const page = dto.page ?? 1;
+    const limit = dto.limit ?? 20;
+    const offset = (page - 1) * limit;
+
+    // Build dynamic filters
+    const conditions: ReturnType<typeof eq>[] = [];
+    if (dto.status) conditions.push(eq(arenaSessions.status, dto.status));
+    if (dto.participationMode) conditions.push(eq(arenaSessions.participationMode, dto.participationMode));
+    if (dto.teamId) conditions.push(eq(arenaSessions.teamId, dto.teamId));
+    if (dto.search) conditions.push(ilike(arenaSessions.topic, `%${dto.search}%`));
+    if (dto.dateFrom) conditions.push(gte(arenaSessions.createdAt, new Date(dto.dateFrom)));
+    if (dto.dateTo) conditions.push(lte(arenaSessions.createdAt, new Date(dto.dateTo)));
+
+    const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+
+    const [totalResult, sessionRows] = await Promise.all([
+      db.select({ value: count() }).from(arenaSessions).where(whereClause),
+      db
+        .select()
+        .from(arenaSessions)
+        .where(whereClause)
+        .orderBy(desc(arenaSessions.createdAt))
+        .limit(limit)
+        .offset(offset),
+    ]);
+
+    const total = totalResult[0]?.value ?? 0;
+
+    if (sessionRows.length === 0) {
+      return { data: [], total, page, limit };
+    }
+
+    // Batch-fetch participants and team names
+    const sessionIds = sessionRows.map((s) => s.id);
+    const teamIds = [...new Set(sessionRows.map((s) => s.teamId).filter(Boolean))] as string[];
+
+    const [allParticipants, teamRows] = await Promise.all([
+      db
+        .select()
+        .from(arenaSessionParticipants)
+        .where(inArray(arenaSessionParticipants.sessionId, sessionIds)),
+      teamIds.length > 0
+        ? db
+            .select({ id: teams.id, name: teams.name })
+            .from(teams)
+            .where(inArray(teams.id, teamIds))
+        : Promise.resolve([]),
+    ]);
+
+    const participantsBySession = new Map<string, ArenaSessionParticipantRow[]>();
+    for (const p of allParticipants) {
+      const list = participantsBySession.get(p.sessionId) ?? [];
+      list.push(p);
+      participantsBySession.set(p.sessionId, list);
+    }
+
+    const teamNameMap = new Map<string, string>();
+    for (const t of teamRows) {
+      teamNameMap.set(t.id, t.name);
+    }
+
+    const data: ArenaSessionSummary[] = sessionRows.map((row) => {
+      const participants = participantsBySession.get(row.id) ?? [];
+      const createdAt = row.createdAt ?? new Date();
+      let durationMinutes: number | undefined;
+      if (row.startedAt && row.endedAt) {
+        durationMinutes = Math.max(
+          1,
+          Math.round((row.endedAt.getTime() - row.startedAt.getTime()) / 60_000),
+        );
+      }
+      return {
+        id: row.id,
+        topic: row.topic ?? undefined,
+        mode: row.mode as ArenaSessionSummary['mode'],
+        participationMode: row.participationMode as ArenaSessionSummary['participationMode'],
+        status: row.status as ArenaSessionSummary['status'],
+        participantCount: participants.length,
+        participantNames: participants.map((p) => p.name),
+        teamId: row.teamId ?? undefined,
+        teamName: row.teamId ? teamNameMap.get(row.teamId) : undefined,
+        startedAt: row.startedAt?.toISOString(),
+        endedAt: row.endedAt?.toISOString(),
+        createdAt: createdAt.toISOString(),
+        durationMinutes,
+      };
+    });
+
+    return { data, total, page, limit };
+  }
+
+  async getSessionTranscripts(sessionId: string) {
+    return db
+      .select()
+      .from(arenaTranscripts)
+      .where(eq(arenaTranscripts.sessionId, sessionId))
+      .orderBy(asc(arenaTranscripts.timestamp));
+  }
+
+  async getSessionMemories(sessionId: string) {
+    return db
+      .select()
+      .from(agentMemories)
+      .where(eq(agentMemories.sourceSessionId, sessionId))
+      .orderBy(desc(agentMemories.createdAt));
+  }
+
   // ─── Query Methods ────────────────────────────────────────────────
 
   async getSessionBrief(sessionId: string) {
@@ -550,6 +705,7 @@ export class ArenaService {
   private mapToSession(
     row: ArenaSessionRow,
     participants: ArenaSessionParticipantRow[],
+    teamName?: string,
   ): ArenaSession {
     const createdAt = row.createdAt ?? new Date();
     return {
@@ -562,6 +718,10 @@ export class ArenaService {
       createdAt: createdAt.toISOString(),
       expiresAt: new Date(createdAt.getTime() + 3600 * 1000).toISOString(),
       roomName: row.roomName ?? undefined,
+      startedAt: row.startedAt?.toISOString(),
+      endedAt: row.endedAt?.toISOString(),
+      teamId: row.teamId ?? undefined,
+      teamName,
     };
   }
 
@@ -574,6 +734,7 @@ export class ArenaService {
 
     return {
       id: row.id,
+      agentId: row.agentId ?? undefined,
       name: row.name,
       type: row.type as ArenaParticipantType,
       instructions: row.instructions ?? undefined,

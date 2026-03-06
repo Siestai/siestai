@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, Param, Post, Res } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, Post, Query, Res, UsePipes, ValidationPipe } from '@nestjs/common';
 import type { Response } from 'express';
 import { AllowAnonymous } from '@thallesp/nestjs-better-auth';
 import { ArenaService } from './arena.service';
@@ -9,6 +9,7 @@ import { AgentsService } from '../agents/agents.service';
 import { ToolsService } from '../tools/tools.service';
 import { MemoryService } from '../memory/memory.service';
 import { CreateArenaSessionDto } from './dto/create-arena-session.dto';
+import { ListArenaSessionsDto } from './dto/list-arena-sessions.dto';
 import { JoinArenaDto } from './dto/join-arena.dto';
 import { PostTranscriptDto } from './dto/post-transcript.dto';
 
@@ -29,9 +30,27 @@ export class ArenaController {
     return this.arenaService.createSession(dto);
   }
 
+  @Get('sessions')
+  @UsePipes(new ValidationPipe({ transform: true }))
+  async listSessions(@Query() dto: ListArenaSessionsDto) {
+    return this.arenaService.listSessions(dto);
+  }
+
   @Get('sessions/:id')
   async getSession(@Param('id') id: string) {
     return this.arenaService.getSession(id);
+  }
+
+  @Get('sessions/:id/transcript')
+  async getSessionTranscripts(@Param('id') id: string) {
+    await this.arenaService.getSession(id);
+    return this.arenaService.getSessionTranscripts(id);
+  }
+
+  @Get('sessions/:id/memories')
+  async getSessionMemories(@Param('id') id: string) {
+    await this.arenaService.getSession(id);
+    return this.arenaService.getSessionMemories(id);
   }
 
   @Post('sessions/:id/start')
@@ -112,8 +131,9 @@ export class ArenaController {
       dto.timestamp ?? Date.now(),
     );
     // Persist transcript (fire-and-forget — don't block the 204 response)
+    const speakerType = dto.speaker === 'You' ? 'human' : 'native_agent';
     this.arenaService
-      .saveTranscript(id, dto.speaker, 'native_agent', dto.text, 'livekit')
+      .saveTranscript(id, dto.speaker, speakerType, dto.text, 'livekit')
       .catch(() => {});
   }
 
