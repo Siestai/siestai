@@ -58,4 +58,4 @@ export {
 export { db, pool } from './client.js';
 
 // Re-export common drizzle-orm operators so consumers don't need a direct dep
-export { eq, and, or, ilike, desc, asc, sql } from 'drizzle-orm';
+export { eq, and, or, ilike, desc, asc, sql, gte, lte, count, inArray } from 'drizzle-orm';

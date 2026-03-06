@@ -120,10 +120,19 @@ function setupTranscriptPosting(
   const speakerTagRegex = /^\[([^\]]+)\]:\s*/;
 
   session.on(voice.AgentSessionEventTypes.ConversationItemAdded, (ev) => {
-    if (ev.item.role !== 'assistant') return;
-
     const text = ev.item.textContent ?? '';
-    if (!text || text.includes('[DONE]')) return;
+    if (!text) return;
+
+    // Capture human (user) speech from STT
+    if (ev.item.role === 'user') {
+      // Skip system injections (follow-up prompts, external agent bridging, etc.)
+      if (text.startsWith('[System:') || text.startsWith('[External agent') || text.startsWith('[TOOL_RESULT]')) return;
+      postTranscript(backendUrl, sessionId, 'You', text);
+      return;
+    }
+
+    if (ev.item.role !== 'assistant') return;
+    if (text.includes('[DONE]')) return;
 
     // Parse speaker from [Name]: text format
     const match = text.match(speakerTagRegex);

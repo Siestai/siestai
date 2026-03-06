@@ -24,6 +24,9 @@ export {
   type MemoryCategory,
   type AgentMemory,
   type ArenaSessionBrief,
+  type ArenaSessionSummary,
+  type PaginatedArenaSessions,
+  type ArenaHistoryFilters,
 } from './types/arena';
 
 export {

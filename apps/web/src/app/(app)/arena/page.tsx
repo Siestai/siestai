@@ -36,6 +36,7 @@ import { ExternalParticipantTile } from "@/components/arena/external-participant
 import { ArenaRoom } from "@/components/arena/arena-room";
 import { AgentPicker } from "@/components/arena/agent-picker";
 import { TeamPicker } from "@/components/arena/team-picker";
+import { ArenaHistory } from "@/components/arena/arena-history";
 import type { Team, TeamAgent } from "@/lib/types";
 import { api } from "@/lib/api";
 
@@ -49,6 +50,7 @@ const STEPS = [
 
 function ArenaPageContent() {
   const [pageState, setPageState] = useState<PageState>("setup");
+  const [activeView, setActiveView] = useState<"new" | "history">("new");
   const [step, setStep] = useState(1);
   const [participationMode, setParticipationMode] =
     useState<ParticipationMode>("human_collab");
@@ -190,10 +192,43 @@ function ArenaPageContent() {
               Multi-agent collaborative conversation.
             </p>
           </div>
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-secondary text-muted-foreground text-sm">
-            Step {step} of {STEPS.length}
-          </div>
+          {activeView === "new" && (
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-secondary text-muted-foreground text-sm">
+              Step {step} of {STEPS.length}
+            </div>
+          )}
         </div>
+
+        {/* Tab toggle */}
+        <div className="flex gap-4 border-b border-border">
+          <button
+            onClick={() => setActiveView("new")}
+            className={cn(
+              "pb-2 text-sm font-medium transition-colors",
+              activeView === "new"
+                ? "border-b-2 border-primary text-foreground"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            New Session
+          </button>
+          <button
+            onClick={() => setActiveView("history")}
+            className={cn(
+              "pb-2 text-sm font-medium transition-colors",
+              activeView === "history"
+                ? "border-b-2 border-primary text-foreground"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            History
+          </button>
+        </div>
+
+        {activeView === "history" ? (
+          <ArenaHistory />
+        ) : (
+        <>
 
         {/* Step Indicator */}
         <div className="flex items-center justify-center gap-0 mb-10">
@@ -686,6 +721,8 @@ function ArenaPageContent() {
             )}
           </div>
         </div>
+        </>
+        )}
       </div>
     );
   }

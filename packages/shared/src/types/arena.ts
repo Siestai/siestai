@@ -17,6 +17,7 @@ export type ArenaParticipantStatus =
 
 export interface ArenaParticipant {
   id: string;
+  agentId?: string;
   name: string;
   type: ArenaParticipantType;
   platform?: string;
@@ -36,6 +37,10 @@ export interface ArenaSession {
   participants: ArenaParticipant[];
   createdAt: string;
   expiresAt: string;
+  startedAt?: string;
+  endedAt?: string;
+  teamId?: string;
+  teamName?: string;
 }
 
 export interface ArenaInvite {
@@ -130,4 +135,38 @@ export interface ArenaSessionBrief {
   unresolved: { topic: string; positions: string[] }[];
   nextSessionQuestions: string[];
   createdAt: string;
+}
+
+// --- Arena History types ---
+
+export interface ArenaSessionSummary {
+  id: string;
+  topic?: string;
+  mode: ArenaMode;
+  participationMode: ParticipationMode;
+  status: ArenaSessionStatus;
+  participantCount: number;
+  participantNames: string[];
+  teamId?: string;
+  teamName?: string;
+  startedAt?: string;
+  endedAt?: string;
+  createdAt: string;
+  durationMinutes?: number;
+}
+
+export interface PaginatedArenaSessions {
+  data: ArenaSessionSummary[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
+export interface ArenaHistoryFilters {
+  search?: string;
+  participationMode?: ParticipationMode;
+  teamId?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  status?: ArenaSessionStatus;
 }

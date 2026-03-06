@@ -11,6 +11,7 @@ export type ParticipationMode = 'agent_only' | 'human_collab';
 
 export interface ArenaParticipant {
   id: string;
+  agentId?: string;
   name: string;
   type: ArenaParticipantType;
   platform?: string;
@@ -31,6 +32,10 @@ export interface ArenaSession {
   createdAt: string;
   expiresAt: string;
   roomName?: string;
+  startedAt?: string;
+  endedAt?: string;
+  teamId?: string;
+  teamName?: string;
 }
 
 export interface ArenaInvite {
