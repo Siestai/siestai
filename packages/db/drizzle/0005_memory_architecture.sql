@@ -2,9 +2,6 @@
 -- Enable pgvector extension
 CREATE EXTENSION IF NOT EXISTS vector;
 
--- Rename old agent_memories to legacy
-ALTER TABLE IF EXISTS "agent_memories" RENAME TO "agent_memories_legacy";
-
 -- Teams
 CREATE TABLE IF NOT EXISTS "teams" (
   "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
