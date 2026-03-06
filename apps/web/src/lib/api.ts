@@ -15,6 +15,13 @@ import type {
   ToolWithStatus,
   ToolCredentialStatus,
   AgentTool,
+  Team,
+  TeamAgent,
+  CreateTeamData,
+  UpdateTeamData,
+  MdFile,
+  DailyMemoryFile,
+  MemorySearchResult,
 } from "./types";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4200";
@@ -171,6 +178,95 @@ class ApiClient {
   // Agent memories
   async getAgentMemories(agentId: string): Promise<AgentMemory[]> {
     return this.request<AgentMemory[]>(`/agents/${agentId}/memories`);
+  }
+
+  // ─── Teams ──────────────────────────────────────────────────────
+
+  async listTeams(): Promise<Team[]> {
+    return this.request<Team[]>("/teams");
+  }
+
+  async getTeam(id: string): Promise<Team> {
+    return this.request<Team>(`/teams/${id}`);
+  }
+
+  async createTeam(data: CreateTeamData): Promise<Team> {
+    return this.request<Team>("/teams", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateTeam(id: string, data: UpdateTeamData): Promise<Team> {
+    return this.request<Team>(`/teams/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteTeam(id: string): Promise<void> {
+    await this.request(`/teams/${id}`, { method: "DELETE" });
+  }
+
+  async getTeamAgents(teamId: string): Promise<TeamAgent[]> {
+    return this.request<TeamAgent[]>(`/teams/${teamId}/agents`);
+  }
+
+  async addTeamAgent(teamId: string, agentId: string, role?: string): Promise<TeamAgent> {
+    return this.request<TeamAgent>(`/teams/${teamId}/agents`, {
+      method: "POST",
+      body: JSON.stringify({ agentId, role }),
+    });
+  }
+
+  async removeTeamAgent(teamId: string, agentId: string): Promise<void> {
+    await this.request(`/teams/${teamId}/agents/${agentId}`, { method: "DELETE" });
+  }
+
+  // ─── MD Files ──────────────────────────────────────────────────
+
+  async getAgentMdFiles(agentId: string): Promise<MdFile[]> {
+    return this.request<MdFile[]>(`/agents/${agentId}/md-files`);
+  }
+
+  async updateAgentMdFile(agentId: string, fileKey: string, content: string): Promise<MdFile> {
+    return this.request<MdFile>(`/agents/${agentId}/md-files/${fileKey}`, {
+      method: "PUT",
+      body: JSON.stringify({ content }),
+    });
+  }
+
+  async getTeamMdFiles(teamId: string): Promise<MdFile[]> {
+    return this.request<MdFile[]>(`/teams/${teamId}/md-files`);
+  }
+
+  async updateTeamMdFile(teamId: string, fileKey: string, content: string): Promise<MdFile> {
+    return this.request<MdFile>(`/teams/${teamId}/md-files/${fileKey}`, {
+      method: "PUT",
+      body: JSON.stringify({ content }),
+    });
+  }
+
+  // ─── Memory Search ─────────────────────────────────────────────
+
+  async searchAgentMemories(agentId: string, query: string, topK = 5): Promise<MemorySearchResult[]> {
+    return this.request<MemorySearchResult[]>(
+      `/agents/${agentId}/memories/search?q=${encodeURIComponent(query)}&topK=${topK}`
+    );
+  }
+
+  async getAgentDailyFiles(agentId: string, days = 30): Promise<DailyMemoryFile[]> {
+    return this.request<DailyMemoryFile[]>(`/agents/${agentId}/daily-files?days=${days}`);
+  }
+
+  async searchTeamMemories(teamId: string, query: string, topK = 5): Promise<MemorySearchResult[]> {
+    return this.request<MemorySearchResult[]>(
+      `/teams/${teamId}/memories/search?q=${encodeURIComponent(query)}&topK=${topK}`
+    );
+  }
+
+  async getTeamDailyFiles(teamId: string, days = 30): Promise<DailyMemoryFile[]> {
+    return this.request<DailyMemoryFile[]>(`/teams/${teamId}/daily-files?days=${days}`);
   }
 
   // Resolve agent name

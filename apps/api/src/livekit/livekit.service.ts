@@ -19,16 +19,36 @@ import { randomBytes } from 'crypto';
 export class LivekitService {
   private roomService: RoomServiceClient;
   private dispatchService: AgentDispatchClient;
+  private readonly isLocal: boolean;
+  private readonly livekitUrl: string;
+  private readonly apiKey: string;
+  private readonly apiSecret: string;
+
+  private static readonly LOCAL_DEFAULTS = {
+    url: 'ws://localhost:7880',
+    apiKey: 'devkey',
+    apiSecret: 'secret',
+  };
 
   constructor(private readonly configService: ConfigService) {
-    const url = this.configService.get<string>('LIVEKIT_URL') || '';
-    const httpUrl = url
+    this.isLocal =
+      this.configService.get<string>('LIVEKIT_ENVIRONMENT') === 'local';
+
+    this.livekitUrl = this.isLocal
+      ? LivekitService.LOCAL_DEFAULTS.url
+      : this.configService.get<string>('LIVEKIT_URL') || '';
+    this.apiKey = this.isLocal
+      ? LivekitService.LOCAL_DEFAULTS.apiKey
+      : this.configService.get<string>('LIVEKIT_API_KEY') || '';
+    this.apiSecret = this.isLocal
+      ? LivekitService.LOCAL_DEFAULTS.apiSecret
+      : this.configService.get<string>('LIVEKIT_API_SECRET') || '';
+
+    const httpUrl = this.livekitUrl
       .replace('wss://', 'https://')
       .replace('ws://', 'http://');
-    const apiKey = this.configService.get<string>('LIVEKIT_API_KEY') || '';
-    const apiSecret = this.configService.get<string>('LIVEKIT_API_SECRET') || '';
-    this.roomService = new RoomServiceClient(httpUrl, apiKey, apiSecret);
-    this.dispatchService = new AgentDispatchClient(httpUrl, apiKey, apiSecret);
+    this.roomService = new RoomServiceClient(httpUrl, this.apiKey, this.apiSecret);
+    this.dispatchService = new AgentDispatchClient(httpUrl, this.apiKey, this.apiSecret);
   }
 
   /** Strip characters that aren't alphanumeric, hyphens, or underscores. */
@@ -39,19 +59,14 @@ export class LivekitService {
   async generateToken(
     dto: CreateTokenDto,
   ): Promise<{ token: string; serverUrl: string; roomName: string }> {
-    const apiKey = this.configService.get<string>('LIVEKIT_API_KEY');
-    const apiSecret = this.configService.get<string>('LIVEKIT_API_SECRET');
-
-    const serverUrl = this.configService.get<string>('LIVEKIT_URL');
-
-    if (!apiKey || !apiSecret || !serverUrl) {
+    if (!this.apiKey || !this.apiSecret || !this.livekitUrl) {
       throw new InternalServerErrorException('LiveKit not configured');
     }
 
     const roomName = this.sanitize(dto.roomName);
     const identity = this.sanitize(dto.identity);
 
-    const at = new AccessToken(apiKey, apiSecret, {
+    const at = new AccessToken(this.apiKey, this.apiSecret, {
       identity,
       name: dto.participantName || identity,
     });
@@ -70,7 +85,7 @@ export class LivekitService {
 
     return {
       token: await at.toJwt(),
-      serverUrl,
+      serverUrl: this.livekitUrl,
       roomName,
     };
   }
@@ -80,11 +95,7 @@ export class LivekitService {
     agentMemories?: Map<string, string>,
     agentToolDefs?: Map<string, { slug: string; name: string; description: string }[]>,
   ): Promise<{ token: string; serverUrl: string; roomName: string }> {
-    const apiKey = this.configService.get<string>('LIVEKIT_API_KEY');
-    const apiSecret = this.configService.get<string>('LIVEKIT_API_SECRET');
-    const serverUrl = this.configService.get<string>('LIVEKIT_URL');
-
-    if (!apiKey || !apiSecret || !serverUrl) {
+    if (!this.apiKey || !this.apiSecret || !this.livekitUrl) {
       throw new InternalServerErrorException('LiveKit not configured');
     }
 
@@ -128,7 +139,7 @@ export class LivekitService {
     await this.roomService.createRoom({ name: roomName, metadata });
     await this.dispatchService.createDispatch(roomName, 'siestai-agent');
 
-    const at = new AccessToken(apiKey, apiSecret, { identity });
+    const at = new AccessToken(this.apiKey, this.apiSecret, { identity });
 
     at.addGrant({
       room: roomName,
@@ -144,7 +155,7 @@ export class LivekitService {
 
     return {
       token: await at.toJwt(),
-      serverUrl,
+      serverUrl: this.livekitUrl,
       roomName,
     };
   }

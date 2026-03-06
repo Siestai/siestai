@@ -46,4 +46,8 @@ export class CreateArenaSessionDto {
   @ValidateNested({ each: true })
   @Type(() => NativeAgentDto)
   nativeAgents?: NativeAgentDto[];
+
+  @IsOptional()
+  @IsString()
+  teamId?: string;
 }

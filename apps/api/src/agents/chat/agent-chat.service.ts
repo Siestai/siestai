@@ -3,6 +3,7 @@ import type { UIMessage } from 'ai';
 import { AgentsService } from '../agents.service';
 import { ToolRegistryService } from '../../tools/tool-registry.service';
 import { MastraService } from '../../mastra/mastra.service';
+import { ContextAssemblyService } from '../../memory/context-assembly.service';
 import { createRuntimeAgent } from '../../mastra/runtime';
 
 export interface ChatStreamResult {
@@ -18,6 +19,7 @@ export class AgentChatService {
     private readonly agentsService: AgentsService,
     private readonly toolRegistry: ToolRegistryService,
     private readonly mastraService: MastraService,
+    private readonly contextAssembly: ContextAssemblyService,
   ) {}
 
   async streamChat(
@@ -39,8 +41,23 @@ export class AgentChatService {
       );
     }
 
+    // Assemble memory-aware context
+    let assembledContext: string | undefined;
+    try {
+      const lastMessage = messages[messages.length - 1];
+      const topic = lastMessage?.parts
+        ?.filter((p: any) => p.type === 'text')
+        .map((p: any) => p.text)
+        .join(' ') || undefined;
+      assembledContext = await this.contextAssembly.assembleContext(agentId, {
+        sessionTopic: topic,
+      });
+    } catch (err) {
+      this.logger.warn(`Context assembly failed for agent ${agentId}: ${err}`);
+    }
+
     const memory = this.mastraService.getChatMemory();
-    const agent = createRuntimeAgent(agentRecord as any, tools, memory);
+    const agent = createRuntimeAgent(agentRecord as any, tools, memory, assembledContext);
     const ephemeralKey = this.mastraService.registerEphemeralAgent(agent);
 
     const threadId = `${userId}:${agentId}`;

@@ -7,6 +7,7 @@ import { LivekitService } from '../livekit/livekit.service';
 import { ArenaGateway } from './arena.gateway';
 import { AgentsService } from '../agents/agents.service';
 import { ToolsService } from '../tools/tools.service';
+import { MemoryService } from '../memory/memory.service';
 import { CreateArenaSessionDto } from './dto/create-arena-session.dto';
 import { JoinArenaDto } from './dto/join-arena.dto';
 import { PostTranscriptDto } from './dto/post-transcript.dto';
@@ -20,6 +21,7 @@ export class ArenaController {
     private readonly arenaGateway: ArenaGateway,
     private readonly agentsService: AgentsService,
     private readonly toolsService: ToolsService,
+    private readonly memoryService: MemoryService,
   ) {}
 
   @Post('sessions')
@@ -44,21 +46,26 @@ export class ArenaController {
       await this.arenaService.getSessionParticipantRows(id);
     for (const p of participantRows) {
       if (p.type === 'native_agent' && p.agentId) {
-        const memories = await this.agentsService.getAgentMemories(
+        // Use vector search with session topic for relevance-ranked memories
+        const searchQuery = session.topic || p.name;
+        const memories = await this.memoryService.searchAgentMemories(
           p.agentId,
+          searchQuery,
           10,
         );
         if (memories.length > 0) {
-          let formatted = memories
-            .map(
-              (m) =>
-                `- [${m.category}] ${m.content}`,
-            )
-            .join('\n');
-          if (formatted.length > 500) {
-            formatted = formatted.substring(0, 497) + '...';
+          // Drop whole items to stay under 500 chars — never slice mid-sentence
+          const items = memories.map(
+            (m: any) => `- [${m.memory_type}|${m.importance > 0.6 ? 'high' : m.importance > 0.3 ? 'medium' : 'low'}] ${m.content}`,
+          );
+          let formatted = '';
+          for (const item of items) {
+            if ((formatted + '\n' + item).length > 500) break;
+            formatted += (formatted ? '\n' : '') + item;
           }
-          agentMemories.set(p.name, formatted);
+          if (formatted) {
+            agentMemories.set(p.name, formatted);
+          }
         }
 
         // Fetch connected tool definitions for this agent

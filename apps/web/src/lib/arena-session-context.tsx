@@ -19,6 +19,7 @@ import type {
 } from "./types";
 import {
   createArenaSession,
+  endArenaSession,
   buildWsUrl,
   type CreateArenaSessionParams,
 } from "./arena-api";
@@ -162,6 +163,7 @@ export function ArenaSessionProvider({ children }: { children: ReactNode }) {
   }, [session]);
 
   const endSession = useCallback(() => {
+    const sessionId = session?.id;
     cleanup();
     setSession(null);
     setInvite(null);
@@ -169,7 +171,12 @@ export function ArenaSessionProvider({ children }: { children: ReactNode }) {
     setParticipants([]);
     setLiveState(null);
     setWsMessages([]);
-  }, [cleanup]);
+
+    // Notify the backend so it triggers extraction (fire-and-forget)
+    if (sessionId) {
+      endArenaSession(sessionId).catch(() => {});
+    }
+  }, [cleanup, session?.id]);
 
   // Close WS on unmount
   useEffect(() => cleanup, [cleanup]);

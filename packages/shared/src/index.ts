@@ -46,6 +46,16 @@ export {
 } from './types/tool';
 
 export {
+  type Team,
+  type TeamAgent,
+  type CreateTeamData,
+  type UpdateTeamData,
+  type MdFile,
+  type DailyMemoryFile,
+  type MemorySearchResult,
+} from './types/team';
+
+export {
   type HealthResponse,
   type ApiError,
   type ConversationSession,

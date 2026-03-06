@@ -15,6 +15,7 @@ export interface CreateArenaSessionParams {
   mode: ArenaMode;
   participationMode: ParticipationMode;
   nativeAgents?: { name: string; agentId?: string; instructions?: string }[];
+  teamId?: string;
 }
 
 export interface CreateArenaSessionResponse {
@@ -112,6 +113,20 @@ export async function getArenaSessionBrief(
   }
 
   return response.json() as Promise<ArenaSessionBrief>;
+}
+
+export async function endArenaSession(sessionId: string): Promise<void> {
+  const response = await fetch(`${API_URL}/arena/sessions/${sessionId}/end`, {
+    method: "POST",
+    credentials: "include",
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text().catch(() => "Unknown error");
+    throw new Error(
+      `Failed to end arena session: ${response.status} ${errorText}`,
+    );
+  }
 }
 
 export function buildWsUrl(hostToken: string): string {

@@ -7,6 +7,10 @@ import {
 import { InvitationService } from './invitation.service';
 import { MemoryExtractionService } from './memory-extraction.service';
 import { CreateArenaSessionDto } from './dto/create-arena-session.dto';
+import { MemoryService } from '../memory/memory.service';
+import { ContextAssemblyService } from '../memory/context-assembly.service';
+import { RedisService } from '../memory/redis.service';
+import { DailyFileService } from '../memory/daily-file.service';
 import {
   ArenaSession,
   ArenaParticipant,
@@ -62,6 +66,10 @@ export class ArenaService {
   constructor(
     private readonly invitationService: InvitationService,
     private readonly memoryExtraction: MemoryExtractionService,
+    private readonly memoryService: MemoryService,
+    private readonly contextAssembly: ContextAssemblyService,
+    private readonly redisService: RedisService,
+    private readonly dailyFileService: DailyFileService,
   ) {}
 
   async createSession(dto: CreateArenaSessionDto): Promise<{
@@ -76,6 +84,7 @@ export class ArenaService {
         mode: dto.mode || 'group',
         participationMode: dto.participationMode || 'human_collab',
         status: 'waiting',
+        teamId: dto.teamId ?? null,
       })
       .returning();
 
@@ -271,6 +280,11 @@ export class ArenaService {
       this.participantExtras.delete(p.id);
     }
 
+    // Flush Redis working memory
+    this.redisService.flushSession(sessionId).catch((err) => {
+      this.logger.warn(`Redis flush failed for session ${sessionId}: ${err}`);
+    });
+
     // Fire-and-forget: trigger async LLM extraction
     this.triggerSessionEndExtraction(sessionId);
   }
@@ -310,66 +324,75 @@ export class ArenaService {
   }
 
   private async runExtraction(sessionId: string): Promise<void> {
+    const startTime = Date.now();
+    this.logger.log(`[extraction] Starting for session ${sessionId}`);
+
     const transcripts = await db
       .select()
       .from(arenaTranscripts)
       .where(eq(arenaTranscripts.sessionId, sessionId));
 
     if (transcripts.length === 0) {
-      this.logger.log(`No transcripts for session ${sessionId}, skipping extraction`);
+      this.logger.log(`[extraction] No transcripts for session ${sessionId}, skipping`);
       return;
     }
 
-    const participants = await db
-      .select()
-      .from(arenaSessionParticipants)
-      .where(eq(arenaSessionParticipants.sessionId, sessionId));
+    this.logger.log(`[extraction] Found ${transcripts.length} transcript entries`);
 
+    const [participants, sessionRows] = await Promise.all([
+      db
+        .select()
+        .from(arenaSessionParticipants)
+        .where(eq(arenaSessionParticipants.sessionId, sessionId)),
+      db
+        .select()
+        .from(arenaSessions)
+        .where(eq(arenaSessions.id, sessionId)),
+    ]);
+
+    const sessionRow = sessionRows[0];
     const transcriptText =
       this.memoryExtraction.formatTranscriptForExtraction(transcripts);
-
     const agentNames = participants.map((p) => p.name);
-
-    // Extract per-agent memories (only for native agents with an agentId)
     const nativeAgents = participants.filter(
       (p) => p.type === 'native_agent' && p.agentId,
     );
+    const teamId = sessionRow?.teamId;
+    const today = new Date().toISOString().split('T')[0];
 
-    for (const agent of nativeAgents) {
-      try {
-        const memories = await this.memoryExtraction.extractAgentMemories(
-          agent.name,
-          transcriptText,
-        );
+    this.logger.log(`[extraction] ${nativeAgents.length} native agents, teamId=${teamId ?? 'none'}`);
 
-        if (memories.length > 0) {
-          await db.insert(agentMemories).values(
-            memories.map((m) => ({
-              agentId: agent.agentId!,
-              sessionId,
-              category: m.category,
-              content: m.content,
-              confidence: m.confidence,
-            })),
-          );
-        }
+    // Run ALL LLM extractions in parallel
+    const briefPromise = this.extractBrief(sessionId, transcriptText, agentNames);
+    const agentMemPromises = nativeAgents.map((agent) =>
+      this.extractAndSaveAgentMemories(sessionId, agent, transcriptText),
+    );
+    const scopeMemPromise = this.extractScopeMemories(
+      sessionId, sessionRow, transcriptText, nativeAgents, agentNames, teamId, today,
+    );
 
-        this.logger.log(
-          `Extracted ${memories.length} memories for agent "${agent.name}" in session ${sessionId}`,
-        );
-      } catch (err) {
-        this.logger.error(
-          `Agent memory extraction failed for "${agent.name}": ${err}`,
-        );
-      }
-    }
+    await Promise.all([briefPromise, ...agentMemPromises, scopeMemPromise]);
 
-    // Extract session brief
+    // Daily files are cheap DB writes, run after
+    await this.appendDailyFiles(sessionRow, nativeAgents, agentNames, teamId, today);
+
+    const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+    this.logger.log(`[extraction] Completed for session ${sessionId} in ${elapsed}s`);
+  }
+
+  private async extractBrief(
+    sessionId: string,
+    transcriptText: string,
+    agentNames: string[],
+  ): Promise<void> {
+    const t0 = Date.now();
     try {
+      this.logger.log(`[brief] Starting extraction for session ${sessionId}`);
       const brief = await this.memoryExtraction.extractSessionBrief(
         transcriptText,
         agentNames,
       );
+      this.logger.log(`[brief] LLM returned in ${((Date.now() - t0) / 1000).toFixed(1)}s`);
 
       await db.insert(arenaSessionBriefs).values({
         sessionId,
@@ -379,10 +402,131 @@ export class ArenaService {
         nextSessionQuestions: brief.nextSessionQuestions,
       });
 
-      this.logger.log(`Extracted session brief for session ${sessionId}`);
+      this.logger.log(`[brief] Saved for session ${sessionId} (${((Date.now() - t0) / 1000).toFixed(1)}s total)`);
     } catch (err) {
-      this.logger.error(`Session brief extraction failed: ${err}`);
+      this.logger.error(`[brief] Failed after ${((Date.now() - t0) / 1000).toFixed(1)}s: ${err}`);
     }
+  }
+
+  private async extractAndSaveAgentMemories(
+    sessionId: string,
+    agent: ArenaSessionParticipantRow,
+    transcriptText: string,
+  ): Promise<void> {
+    const t0 = Date.now();
+    try {
+      this.logger.log(`[agent-mem] Extracting for "${agent.name}"`);
+      const memories = await this.memoryExtraction.extractAgentMemories(
+        agent.name,
+        transcriptText,
+      );
+      this.logger.log(`[agent-mem] "${agent.name}" LLM returned ${memories.length} memories in ${((Date.now() - t0) / 1000).toFixed(1)}s`);
+
+      if (memories.length > 0) {
+        await db.insert(agentMemories).values(
+          memories.map((m) => ({
+            agentId: agent.agentId!,
+            sourceSessionId: sessionId,
+            memoryType: m.category,
+            content: m.content,
+            importance: m.confidence === 'high' ? 0.8 : m.confidence === 'medium' ? 0.5 : 0.3,
+          })),
+        );
+      }
+
+      this.logger.log(`[agent-mem] "${agent.name}" done in ${((Date.now() - t0) / 1000).toFixed(1)}s`);
+    } catch (err) {
+      this.logger.error(`[agent-mem] "${agent.name}" failed after ${((Date.now() - t0) / 1000).toFixed(1)}s: ${err}`);
+    }
+  }
+
+  private async extractScopeMemories(
+    sessionId: string,
+    sessionRow: ArenaSessionRow | undefined,
+    transcriptText: string,
+    nativeAgents: ArenaSessionParticipantRow[],
+    agentNames: string[],
+    teamId: string | null | undefined,
+    today: string,
+  ): Promise<void> {
+    const t0 = Date.now();
+    if (teamId) {
+      try {
+        this.logger.log(`[team-mem] Extracting team memories`);
+        const teamInsights = await this.memoryExtraction.extractAgentMemories(
+          'team',
+          transcriptText,
+        );
+        this.logger.log(`[team-mem] LLM returned ${teamInsights.length} in ${((Date.now() - t0) / 1000).toFixed(1)}s`);
+
+        await Promise.all(
+          teamInsights.map((insight) =>
+            this.memoryService.createTeamMemory({
+              teamId,
+              content: insight.content,
+              memoryType: insight.category === 'decision' ? 'decision' : 'summary',
+              sourceSessionId: sessionId,
+              importance: insight.confidence === 'high' ? 0.8 : insight.confidence === 'medium' ? 0.5 : 0.3,
+            }),
+          ),
+        );
+        this.logger.log(`[team-mem] Done in ${((Date.now() - t0) / 1000).toFixed(1)}s`);
+      } catch (err) {
+        this.logger.error(`[team-mem] Failed after ${((Date.now() - t0) / 1000).toFixed(1)}s: ${err}`);
+      }
+    } else if (sessionRow?.createdBy) {
+      try {
+        this.logger.log(`[adhoc-mem] Extracting adhoc memories`);
+        const adhocInsights = await this.memoryExtraction.extractAgentMemories(
+          'group',
+          transcriptText,
+        );
+        this.logger.log(`[adhoc-mem] LLM returned ${adhocInsights.length} in ${((Date.now() - t0) / 1000).toFixed(1)}s`);
+
+        const agentIds = nativeAgents.map((a) => a.agentId!).filter(Boolean);
+        await Promise.all(
+          adhocInsights.map((insight) =>
+            this.memoryService.createAdhocMemory({
+              userId: sessionRow.createdBy!,
+              content: insight.content,
+              memoryType: insight.category,
+              sourceSessionId: sessionId,
+              participantAgentIds: agentIds,
+              importance: insight.confidence === 'high' ? 0.8 : 0.5,
+            }),
+          ),
+        );
+        this.logger.log(`[adhoc-mem] Done in ${((Date.now() - t0) / 1000).toFixed(1)}s`);
+      } catch (err) {
+        this.logger.error(`[adhoc-mem] Failed after ${((Date.now() - t0) / 1000).toFixed(1)}s: ${err}`);
+      }
+    }
+  }
+
+  private async appendDailyFiles(
+    sessionRow: ArenaSessionRow | undefined,
+    nativeAgents: ArenaSessionParticipantRow[],
+    agentNames: string[],
+    teamId: string | null | undefined,
+    today: string,
+  ): Promise<void> {
+    const topic = sessionRow?.topic || 'Untitled';
+    const writes: Promise<void>[] = [];
+
+    if (teamId) {
+      const teamSummary = `Session "${topic}" with ${agentNames.join(', ')}`;
+      writes.push(this.dailyFileService.appendToDaily('team', teamId, today, teamSummary));
+    }
+
+    for (const agent of nativeAgents) {
+      if (agent.agentId) {
+        writes.push(
+          this.dailyFileService.appendToDaily('agent', agent.agentId, today, `Participated in session "${topic}"`),
+        );
+      }
+    }
+
+    await Promise.all(writes);
   }
 
   // ─── Query Methods ────────────────────────────────────────────────
@@ -400,7 +544,7 @@ export class ArenaService {
     return db
       .select()
       .from(agentMemories)
-      .where(eq(agentMemories.sessionId, sessionId));
+      .where(eq(agentMemories.sourceSessionId, sessionId));
   }
 
   private mapToSession(

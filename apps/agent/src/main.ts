@@ -14,6 +14,13 @@ import { ToolExecutor } from './tool-executor.js';
 
 dotenv.config({ path: '.env.local' });
 
+const isLocalLivekit = process.env.LIVEKIT_ENVIRONMENT === 'local';
+if (isLocalLivekit) {
+  process.env.LIVEKIT_URL = 'ws://localhost:7880';
+  process.env.LIVEKIT_API_KEY = 'devkey';
+  process.env.LIVEKIT_API_SECRET = 'secret';
+}
+
 const isDev = process.argv.includes('dev');
 
 const getLogger = () => log();

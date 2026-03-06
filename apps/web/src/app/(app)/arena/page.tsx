@@ -35,6 +35,9 @@ import { InviteLinkPanel } from "@/components/arena/invite-link-panel";
 import { ExternalParticipantTile } from "@/components/arena/external-participant-tile";
 import { ArenaRoom } from "@/components/arena/arena-room";
 import { AgentPicker } from "@/components/arena/agent-picker";
+import { TeamPicker } from "@/components/arena/team-picker";
+import type { Team, TeamAgent } from "@/lib/types";
+import { api } from "@/lib/api";
 
 type PageState = "setup" | "waiting" | "live" | "ended";
 
@@ -50,8 +53,13 @@ function ArenaPageContent() {
   const [participationMode, setParticipationMode] =
     useState<ParticipationMode>("human_collab");
   const [topic, setTopic] = useState("");
-  const [configMode, setConfigMode] = useState<"manual" | "agents">("agents");
+  const [configMode, setConfigMode] = useState<"manual" | "agents" | "team">(
+    "agents",
+  );
   const [selectedAgents, setSelectedAgents] = useState<Agent[]>([]);
+  const [selectedTeam, setSelectedTeam] = useState<Team | null>(null);
+  const [teamAgents, setTeamAgents] = useState<TeamAgent[]>([]);
+  const [loadingTeamAgents, setLoadingTeamAgents] = useState(false);
   const [manualAgents, setManualAgents] = useState<
     { name: string; instructions: string }[]
   >([
@@ -73,8 +81,7 @@ function ArenaPageContent() {
 
   const canProceedFromStep = (s: number) => {
     if (s === 1) {
-      // Allow proceeding with at least 1 agent (native or manual)
-      // because external agents can be invited later.
+      if (configMode === "team") return selectedTeam !== null && teamAgents.length >= 1;
       return configMode === "agents"
         ? selectedAgents.length >= 1
         : validManualAgents.length >= 1;
@@ -94,23 +101,35 @@ function ArenaPageContent() {
   const handleStartConversation = async () => {
     setIsCreating(true);
     try {
-      const nativeAgents =
-        configMode === "agents"
-          ? selectedAgents.map((a) => ({
-              name: a.name,
-              agentId: a.id,
-              instructions: a.instructions,
-            }))
-          : validManualAgents.map((a) => ({
-              name: a.name.trim(),
-              instructions: a.instructions.trim(),
-            }));
+      let nativeAgents: { name: string; agentId?: string; instructions?: string }[];
+
+      if (configMode === "team") {
+        nativeAgents = teamAgents
+          .filter((ta) => ta.agent)
+          .map((ta) => ({
+            name: ta.agent!.name,
+            agentId: ta.agentId,
+            instructions: ta.agent!.description ?? undefined,
+          }));
+      } else if (configMode === "agents") {
+        nativeAgents = selectedAgents.map((a) => ({
+          name: a.name,
+          agentId: a.id,
+          instructions: a.instructions,
+        }));
+      } else {
+        nativeAgents = validManualAgents.map((a) => ({
+          name: a.name.trim(),
+          instructions: a.instructions.trim(),
+        }));
+      }
 
       await arenaSession.createSession({
         topic: topic.trim(),
         mode: "group",
         participationMode,
         nativeAgents,
+        teamId: configMode === "team" ? selectedTeam?.id : undefined,
       });
       arenaSession.startListening();
       sessionStartedAt.current = Date.now();
@@ -145,6 +164,8 @@ function ArenaPageContent() {
     setParticipationMode("human_collab");
     setConfigMode("agents");
     setSelectedAgents([]);
+    setSelectedTeam(null);
+    setTeamAgents([]);
     setManualAgents([
       { name: "", instructions: "" },
       { name: "", instructions: "" },
@@ -244,6 +265,19 @@ function ArenaPageContent() {
                   </button>
                   <button
                     type="button"
+                    onClick={() => setConfigMode("team")}
+                    className={cn(
+                      "flex items-center gap-2 px-4 py-2 text-sm font-medium transition-colors",
+                      configMode === "team"
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-card text-muted-foreground hover:text-foreground hover:bg-secondary/50",
+                    )}
+                  >
+                    <Users className="h-4 w-4" />
+                    Use a Team
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => setConfigMode("manual")}
                     className={cn(
                       "flex items-center gap-2 px-4 py-2 text-sm font-medium transition-colors",
@@ -258,12 +292,75 @@ function ArenaPageContent() {
                 <p className="text-xs text-muted-foreground mt-2">
                   {configMode === "agents"
                     ? "Select from your saved agents with pre-configured personalities."
-                    : "Configure each agent's name and persona from scratch."}
+                    : configMode === "team"
+                      ? "Select a team to automatically include all its agents."
+                      : "Configure each agent's name and persona from scratch."}
                 </p>
               </div>
 
               <div className="rounded-lg border border-border bg-card/30 p-6">
-                {configMode === "agents" ? (
+                {configMode === "team" ? (
+                  <div className="space-y-4">
+                    <TeamPicker
+                      selectedTeam={selectedTeam}
+                      onSelectionChange={(team) => {
+                        setSelectedTeam(team);
+                        setTeamAgents([]);
+                        if (team) {
+                          setLoadingTeamAgents(true);
+                          api
+                            .getTeamAgents(team.id)
+                            .then(setTeamAgents)
+                            .catch(() => setTeamAgents([]))
+                            .finally(() => setLoadingTeamAgents(false));
+                        }
+                      }}
+                    />
+                    {selectedTeam && (
+                      <div className="rounded-lg border border-border bg-card/50 p-4">
+                        <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
+                          Team Agents
+                        </h4>
+                        {loadingTeamAgents ? (
+                          <div className="flex items-center gap-2 py-3">
+                            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                            <span className="text-sm text-muted-foreground">
+                              Loading team agents...
+                            </span>
+                          </div>
+                        ) : teamAgents.length === 0 ? (
+                          <p className="text-sm text-muted-foreground py-2">
+                            No agents in this team. Add agents to the team
+                            first.
+                          </p>
+                        ) : (
+                          <div className="flex flex-wrap gap-2">
+                            {teamAgents.map((ta) => (
+                              <div
+                                key={ta.id}
+                                className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-border/30 bg-card"
+                              >
+                                <span
+                                  className="h-2 w-2 rounded-full shrink-0"
+                                  style={{
+                                    backgroundColor:
+                                      ta.agent?.color ?? "#3b82f6",
+                                  }}
+                                />
+                                <span className="text-sm">
+                                  {ta.agent?.name ?? "Unknown"}
+                                </span>
+                                <span className="text-[10px] text-muted-foreground capitalize">
+                                  {ta.role}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ) : configMode === "agents" ? (
                   <AgentPicker
                     selectedAgents={selectedAgents}
                     onSelectionChange={setSelectedAgents}
@@ -492,16 +589,28 @@ function ArenaPageContent() {
                   Summary
                 </h3>
                 <div className="space-y-2 text-sm">
+                  {configMode === "team" && selectedTeam && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Team</span>
+                      <span className="text-foreground truncate max-w-[250px]">
+                        {selectedTeam.name}
+                      </span>
+                    </div>
+                  )}
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Agents</span>
                     <span className="text-foreground truncate max-w-[250px]">
-                      {configMode === "agents"
-                        ? selectedAgents.length > 0
-                          ? `${selectedAgents.map((a) => a.name).join(", ")} (${selectedAgents.length})`
-                          : "None selected"
-                        : validManualAgents.length > 0
-                          ? `${validManualAgents.map((a) => a.name.trim()).join(", ")} (${validManualAgents.length})`
-                          : "None configured"}
+                      {configMode === "team"
+                        ? teamAgents.length > 0
+                          ? `${teamAgents.map((ta) => ta.agent?.name ?? "Unknown").join(", ")} (${teamAgents.length})`
+                          : "None in team"
+                        : configMode === "agents"
+                          ? selectedAgents.length > 0
+                            ? `${selectedAgents.map((a) => a.name).join(", ")} (${selectedAgents.length})`
+                            : "None selected"
+                          : validManualAgents.length > 0
+                            ? `${validManualAgents.map((a) => a.name.trim()).join(", ")} (${validManualAgents.length})`
+                            : "None configured"}
                     </span>
                   </div>
                   <div className="flex justify-between">

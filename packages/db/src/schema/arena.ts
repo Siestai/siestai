@@ -8,6 +8,7 @@ import {
 } from 'drizzle-orm/pg-core';
 import { user } from './auth.js';
 import { agents } from './agents.js';
+import { teams } from './teams.js';
 
 export const arenaSessions = pgTable('arena_sessions', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -16,6 +17,7 @@ export const arenaSessions = pgTable('arena_sessions', {
   participationMode: varchar('participation_mode', { length: 50 }).notNull(),
   status: varchar('status', { length: 20 }).default('waiting').notNull(),
   roomName: varchar('room_name', { length: 255 }),
+  teamId: uuid('team_id').references(() => teams.id, { onDelete: 'set null' }),
   createdBy: text('created_by').references(() => user.id),
   startedAt: timestamp('started_at'),
   endedAt: timestamp('ended_at'),
