@@ -1,6 +1,6 @@
 -- Phase 1: Memory Architecture Migration
 -- Enable pgvector extension
-CREATE EXTENSION IF NOT EXISTS vector;
+CREATE EXTENSION IF NOT EXISTS vector;--> statement-breakpoint
 
 -- Teams
 CREATE TABLE IF NOT EXISTS "teams" (
@@ -10,7 +10,7 @@ CREATE TABLE IF NOT EXISTS "teams" (
   "description" text DEFAULT '',
   "created_at" timestamp DEFAULT now(),
   "updated_at" timestamp DEFAULT now()
-);
+);--> statement-breakpoint
 
 CREATE TABLE IF NOT EXISTS "team_agents" (
   "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
@@ -19,7 +19,7 @@ CREATE TABLE IF NOT EXISTS "team_agents" (
   "role" varchar(50) DEFAULT 'member',
   "joined_at" timestamp DEFAULT now(),
   CONSTRAINT "team_agents_team_agent_unique" UNIQUE("team_id", "agent_id")
-);
+);--> statement-breakpoint
 
 -- MD Files
 CREATE TABLE IF NOT EXISTS "agent_md_files" (
@@ -31,7 +31,7 @@ CREATE TABLE IF NOT EXISTS "agent_md_files" (
   "updated_at" timestamp DEFAULT now(),
   "updated_by" varchar(10) DEFAULT 'system',
   CONSTRAINT "agent_md_files_agent_key_unique" UNIQUE("agent_id", "file_key")
-);
+);--> statement-breakpoint
 
 CREATE TABLE IF NOT EXISTS "team_md_files" (
   "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
@@ -42,10 +42,10 @@ CREATE TABLE IF NOT EXISTS "team_md_files" (
   "updated_at" timestamp DEFAULT now(),
   "updated_by" varchar(10) DEFAULT 'system',
   CONSTRAINT "team_md_files_team_key_unique" UNIQUE("team_id", "file_key")
-);
+);--> statement-breakpoint
 
 -- Add teamId to arena_sessions
-ALTER TABLE "arena_sessions" ADD COLUMN IF NOT EXISTS "team_id" uuid REFERENCES "teams"("id") ON DELETE SET NULL;
+ALTER TABLE "arena_sessions" ADD COLUMN IF NOT EXISTS "team_id" uuid REFERENCES "teams"("id") ON DELETE SET NULL;--> statement-breakpoint
 
 -- New agent_memories (vector-backed)
 CREATE TABLE IF NOT EXISTS "agent_memories" (
@@ -58,9 +58,9 @@ CREATE TABLE IF NOT EXISTS "agent_memories" (
   "importance" real DEFAULT 0.5,
   "created_at" timestamp DEFAULT now(),
   "last_accessed_at" timestamp DEFAULT now()
-);
+);--> statement-breakpoint
 
-CREATE INDEX IF NOT EXISTS "agent_memories_agent_id_idx" ON "agent_memories" ("agent_id");
+CREATE INDEX IF NOT EXISTS "agent_memories_agent_id_idx" ON "agent_memories" ("agent_id");--> statement-breakpoint
 
 -- Team memories
 CREATE TABLE IF NOT EXISTS "team_memories" (
@@ -74,9 +74,9 @@ CREATE TABLE IF NOT EXISTS "team_memories" (
   "importance" real DEFAULT 0.5,
   "created_at" timestamp DEFAULT now(),
   "last_accessed_at" timestamp DEFAULT now()
-);
+);--> statement-breakpoint
 
-CREATE INDEX IF NOT EXISTS "team_memories_team_id_idx" ON "team_memories" ("team_id");
+CREATE INDEX IF NOT EXISTS "team_memories_team_id_idx" ON "team_memories" ("team_id");--> statement-breakpoint
 
 -- Ad-hoc memories
 CREATE TABLE IF NOT EXISTS "adhoc_memories" (
@@ -90,9 +90,9 @@ CREATE TABLE IF NOT EXISTS "adhoc_memories" (
   "importance" real DEFAULT 0.5,
   "created_at" timestamp DEFAULT now(),
   "last_accessed_at" timestamp DEFAULT now()
-);
+);--> statement-breakpoint
 
-CREATE INDEX IF NOT EXISTS "adhoc_memories_user_id_idx" ON "adhoc_memories" ("user_id");
+CREATE INDEX IF NOT EXISTS "adhoc_memories_user_id_idx" ON "adhoc_memories" ("user_id");--> statement-breakpoint
 
 -- Daily memory files
 CREATE TABLE IF NOT EXISTS "daily_memory_files" (
@@ -106,9 +106,9 @@ CREATE TABLE IF NOT EXISTS "daily_memory_files" (
   "created_at" timestamp DEFAULT now(),
   "updated_at" timestamp DEFAULT now(),
   CONSTRAINT "daily_memory_files_scope_date_unique" UNIQUE("scope_type", "scope_id", "date")
-);
+);--> statement-breakpoint
 
-CREATE INDEX IF NOT EXISTS "daily_memory_files_scope_idx" ON "daily_memory_files" ("scope_type", "scope_id");
+CREATE INDEX IF NOT EXISTS "daily_memory_files_scope_idx" ON "daily_memory_files" ("scope_type", "scope_id");--> statement-breakpoint
 
 -- Arena session briefs
 CREATE TABLE IF NOT EXISTS "arena_session_briefs" (
@@ -120,10 +120,10 @@ CREATE TABLE IF NOT EXISTS "arena_session_briefs" (
   "next_session_questions" jsonb DEFAULT '[]',
   "created_at" timestamp DEFAULT now(),
   CONSTRAINT "arena_session_briefs_session_id_unique" UNIQUE("session_id")
-);
+);--> statement-breakpoint
 
 -- HNSW indexes for vector similarity search
-CREATE INDEX IF NOT EXISTS "agent_memories_embedding_idx" ON "agent_memories" USING hnsw ("embedding" vector_cosine_ops);
-CREATE INDEX IF NOT EXISTS "team_memories_embedding_idx" ON "team_memories" USING hnsw ("embedding" vector_cosine_ops);
-CREATE INDEX IF NOT EXISTS "adhoc_memories_embedding_idx" ON "adhoc_memories" USING hnsw ("embedding" vector_cosine_ops);
+CREATE INDEX IF NOT EXISTS "agent_memories_embedding_idx" ON "agent_memories" USING hnsw ("embedding" vector_cosine_ops);--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "team_memories_embedding_idx" ON "team_memories" USING hnsw ("embedding" vector_cosine_ops);--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "adhoc_memories_embedding_idx" ON "adhoc_memories" USING hnsw ("embedding" vector_cosine_ops);--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "daily_memory_files_embedding_idx" ON "daily_memory_files" USING hnsw ("embedding" vector_cosine_ops);
