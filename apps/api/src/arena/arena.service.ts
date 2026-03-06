@@ -586,7 +586,10 @@ export class ArenaService {
     if (dto.status) conditions.push(eq(arenaSessions.status, dto.status));
     if (dto.participationMode) conditions.push(eq(arenaSessions.participationMode, dto.participationMode));
     if (dto.teamId) conditions.push(eq(arenaSessions.teamId, dto.teamId));
-    if (dto.search) conditions.push(ilike(arenaSessions.topic, `%${dto.search}%`));
+    if (dto.search) {
+      const escaped = dto.search.replace(/[%_]/g, '\\$&');
+      conditions.push(ilike(arenaSessions.topic, `%${escaped}%`));
+    }
     if (dto.dateFrom) conditions.push(gte(arenaSessions.createdAt, new Date(dto.dateFrom)));
     if (dto.dateTo) conditions.push(lte(arenaSessions.createdAt, new Date(dto.dateTo)));
 
