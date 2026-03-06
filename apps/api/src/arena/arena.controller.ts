@@ -66,20 +66,19 @@ export class ArenaController {
     const agentTeamNames = new Map<string, string[]>();
     const participantRows =
       await this.arenaService.getSessionParticipantRows(id);
-    for (const p of participantRows) {
-      if (p.type === 'native_agent' && p.agentId) {
-        // Fetch team memberships for this agent
-        const teamNames = await this.teamsService.getAgentTeamNames(p.agentId);
-        if (teamNames.length > 0) {
-          agentTeamNames.set(p.name, teamNames);
-        }
-        // Use vector search with session topic for relevance-ranked memories
+    const nativeAgentParticipants = participantRows.filter(
+      (p) => p.type === 'native_agent' && p.agentId,
+    );
+
+    await Promise.all(
+      nativeAgentParticipants.map(async (p) => {
         const searchQuery = session.topic || p.name;
-        const memories = await this.memoryService.searchAgentMemories(
-          p.agentId,
-          searchQuery,
-          10,
-        );
+        const [memories, toolRows, teamNames] = await Promise.all([
+          this.memoryService.searchAgentMemories(p.agentId!, searchQuery, 10),
+          this.toolsService.getAgentToolsWithDefinitions(p.agentId!),
+          this.teamsService.getAgentTeamNames(p.agentId!),
+        ]);
+
         if (memories.length > 0) {
           // Drop whole items to stay under 1500 chars — never slice mid-sentence
           const items = memories.map(
@@ -95,8 +94,6 @@ export class ArenaController {
           }
         }
 
-        // Fetch connected tool definitions for this agent
-        const toolRows = await this.toolsService.getAgentToolsWithDefinitions(p.agentId);
         if (toolRows.length > 0) {
           agentToolDefs.set(
             p.name,
@@ -107,8 +104,12 @@ export class ArenaController {
             })),
           );
         }
-      }
-    }
+
+        if (teamNames.length > 0) {
+          agentTeamNames.set(p.name, teamNames);
+        }
+      }),
+    );
 
     // Load previous session briefs for continuity
     const agentIds = participantRows

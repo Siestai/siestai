@@ -743,8 +743,13 @@ export class ArenaService {
         .orderBy(desc(arenaSessions.endedAt))
         .limit(limit);
     } else {
-      // Ad-hoc: find sessions with overlapping agent participants
+      // Ad-hoc: find sessions with overlapping agent participants (use subquery to avoid duplicates)
       const agentIdList = agentIds!;
+      const matchingSessionIds = db
+        .selectDistinct({ sessionId: arenaSessionParticipants.sessionId })
+        .from(arenaSessionParticipants)
+        .where(inArray(arenaSessionParticipants.agentId, agentIdList));
+
       rows = await db
         .select({
           topic: arenaSessions.topic,
@@ -756,12 +761,11 @@ export class ArenaService {
         })
         .from(arenaSessions)
         .innerJoin(arenaSessionBriefs, eq(arenaSessionBriefs.sessionId, arenaSessions.id))
-        .innerJoin(arenaSessionParticipants, eq(arenaSessionParticipants.sessionId, arenaSessions.id))
         .where(
           and(
             eq(arenaSessions.status, 'ended'),
             sql`${arenaSessions.id} != ${currentSessionId}`,
-            inArray(arenaSessionParticipants.agentId, agentIdList),
+            inArray(arenaSessions.id, matchingSessionIds),
           ),
         )
         .orderBy(desc(arenaSessions.endedAt))
