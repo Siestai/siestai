@@ -94,6 +94,8 @@ export class LivekitService {
     session: ArenaSession,
     agentMemories?: Map<string, string>,
     agentToolDefs?: Map<string, { slug: string; name: string; description: string }[]>,
+    sessionContinuity?: string,
+    agentTeamNames?: Map<string, string[]>,
   ): Promise<{ token: string; serverUrl: string; roomName: string }> {
     if (!this.apiKey || !this.apiSecret || !this.livekitUrl) {
       throw new InternalServerErrorException('LiveKit not configured');
@@ -121,6 +123,9 @@ export class LivekitService {
           ...(agentToolDefs?.get(p.name) && {
             tools: agentToolDefs.get(p.name),
           }),
+          ...(agentTeamNames?.get(p.name) && {
+            teamNames: agentTeamNames.get(p.name),
+          }),
         })),
       mode: session.mode,
       topic: session.topic,
@@ -128,6 +133,7 @@ export class LivekitService {
       sessionId: session.id,
       backendUrl,
       ...(toolSecret && { toolSecret }),
+      ...(sessionContinuity && { sessionContinuity }),
     });
 
     if (Buffer.byteLength(metadata, 'utf8') > 60 * 1024) {

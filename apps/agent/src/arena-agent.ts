@@ -11,6 +11,7 @@ export interface ArenaAgentConfig {
   instructions: string;
   memories?: string;
   tools?: ArenaToolDef[];
+  teamNames?: string[];
 }
 
 export interface ArenaMetadata {
@@ -22,6 +23,7 @@ export interface ArenaMetadata {
   sessionId?: string;
   backendUrl?: string;
   toolSecret?: string;
+  sessionContinuity?: string;
 }
 
 /**
@@ -75,8 +77,11 @@ export class ArenaAgent extends voice.Agent {
     sections.push('Characters:');
     for (const agent of metadata.agents) {
       const cleanInstructions = sanitizeInstructions(agent.instructions);
+      const teamInfo = agent.teamNames?.length
+        ? ` You are a member of the following team(s): ${agent.teamNames.join(', ')}. You should be aware of your team affiliations and draw on shared team context when relevant.`
+        : '';
       sections.push(
-        `<agent name="${agent.name}">${cleanInstructions}</agent>`,
+        `<agent name="${agent.name}">${cleanInstructions}${teamInfo}</agent>`,
       );
     }
 
@@ -92,7 +97,17 @@ export class ArenaAgent extends voice.Agent {
       }
     }
 
-    // 3b. Tools available to agents
+    // 3b. Session continuity from previous sessions
+    if (metadata.sessionContinuity) {
+      sections.push('');
+      sections.push('## Previous Session Context');
+      sections.push(
+        'The following is context from previous sessions. You MUST reference this naturally in conversation — acknowledge prior decisions, build on unresolved topics, and continue where you left off.',
+      );
+      sections.push(metadata.sessionContinuity);
+    }
+
+    // 3c. Tools available to agents
     const allTools = metadata.agents.flatMap((a) => a.tools ?? []);
     if (allTools.length > 0) {
       // Deduplicate by slug
@@ -177,15 +192,18 @@ export class ArenaAgent extends voice.Agent {
       truncatedSections.push('Characters:');
       for (const agent of metadata.agents) {
         let cleanInstructions = sanitizeInstructions(agent.instructions);
-        if (cleanInstructions.length > perAgentMax) {
-          cleanInstructions =
-            cleanInstructions.substring(0, perAgentMax - 3) + '...';
-        }
+        const teamInfo = agent.teamNames?.length
+          ? ` You are a member of the following team(s): ${agent.teamNames.join(', ')}. You should be aware of your team affiliations and draw on shared team context when relevant.`
+          : '';
+        const totalContent = cleanInstructions + teamInfo;
+        const truncated = totalContent.length > perAgentMax
+          ? totalContent.substring(0, perAgentMax - 3) + '...'
+          : totalContent;
         truncatedSections.push(
-          `<agent name="${agent.name}">${cleanInstructions}</agent>`,
+          `<agent name="${agent.name}">${truncated}</agent>`,
         );
       }
-      // Re-add memory section (memories are not truncated — already capped at 500 chars per agent)
+      // Re-add memory section (memories are not truncated — already capped at 1500 chars per agent)
       if (agentsWithMemories.length > 0) {
         truncatedSections.push('');
         truncatedSections.push('## Context from Previous Sessions');
@@ -194,6 +212,15 @@ export class ArenaAgent extends voice.Agent {
             `<memory agent="${agent.name}">${agent.memories}</memory>`,
           );
         }
+      }
+      // Re-add session continuity (already capped at ~2000 chars)
+      if (metadata.sessionContinuity) {
+        truncatedSections.push('');
+        truncatedSections.push('## Previous Session Context');
+        truncatedSections.push(
+          'The following is context from previous sessions. You MUST reference this naturally in conversation — acknowledge prior decisions, build on unresolved topics, and continue where you left off.',
+        );
+        truncatedSections.push(metadata.sessionContinuity);
       }
       const formatRulesIdx = sections.indexOf('Format rules:');
       if (formatRulesIdx !== -1) {
@@ -225,12 +252,19 @@ export class ArenaAgent extends voice.Agent {
 export function buildArenaGreeting(metadata: ArenaMetadata): string {
   const firstName = metadata.agents[0]?.name ?? 'Agent';
   const topic = metadata.topic;
+  const hasContinuity = !!metadata.sessionContinuity;
 
   if (metadata.participationMode === 'agent_only' && topic) {
+    if (hasContinuity) {
+      return `Continue the discussion on '${topic}'. Start as [${firstName}] and briefly reference what was discussed previously — decisions made, unresolved points — then advance the conversation.`;
+    }
     return `Begin the discussion on the topic: "${topic}". Start as [${firstName}] and introduce the topic, then continue the conversation by alternating between personas.`;
   }
 
   if (topic) {
+    if (hasContinuity) {
+      return `Greet the user as [${firstName}]. Briefly recap the key points from the previous session on '${topic}' and ask what aspect they'd like to explore or continue with.`;
+    }
     return `Greet the user as [${firstName}] and introduce the discussion topic: "${topic}". Invite the user to join the conversation.`;
   }
 

@@ -8,9 +8,10 @@ import { MemoryExtractionService } from './memory-extraction.service';
 import { LivekitModule } from '../livekit/livekit.module';
 import { AgentsModule } from '../agents/agents.module';
 import { ToolsModule } from '../tools/tools.module';
+import { TeamsModule } from '../teams/teams.module';
 
 @Module({
-  imports: [LivekitModule, ConfigModule, AgentsModule, ToolsModule],
+  imports: [LivekitModule, ConfigModule, AgentsModule, ToolsModule, TeamsModule],
   controllers: [ArenaController],
   providers: [ArenaService, InvitationService, ArenaGateway, MemoryExtractionService],
 })

@@ -416,10 +416,10 @@ export class ArenaService {
       sessionId, sessionRow, transcriptText, nativeAgents, agentNames, teamId, today,
     );
 
-    await Promise.all([briefPromise, ...agentMemPromises, scopeMemPromise]);
+    const [briefResult] = await Promise.all([briefPromise, ...agentMemPromises, scopeMemPromise]);
 
-    // Daily files are cheap DB writes, run after
-    await this.appendDailyFiles(sessionRow, nativeAgents, agentNames, teamId, today);
+    // Daily files are cheap DB writes, run after — pass brief for richer entries
+    await this.appendDailyFiles(sessionRow, nativeAgents, agentNames, teamId, today, briefResult);
 
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
     this.logger.log(`[extraction] Completed for session ${sessionId} in ${elapsed}s`);
@@ -429,7 +429,7 @@ export class ArenaService {
     sessionId: string,
     transcriptText: string,
     agentNames: string[],
-  ): Promise<void> {
+  ): Promise<{ decisions: any[]; actionItems: any[]; unresolved: any[]; nextSessionQuestions: string[] } | null> {
     const t0 = Date.now();
     try {
       this.logger.log(`[brief] Starting extraction for session ${sessionId}`);
@@ -448,8 +448,10 @@ export class ArenaService {
       });
 
       this.logger.log(`[brief] Saved for session ${sessionId} (${((Date.now() - t0) / 1000).toFixed(1)}s total)`);
+      return brief;
     } catch (err) {
       this.logger.error(`[brief] Failed after ${((Date.now() - t0) / 1000).toFixed(1)}s: ${err}`);
+      return null;
     }
   }
 
@@ -468,14 +470,16 @@ export class ArenaService {
       this.logger.log(`[agent-mem] "${agent.name}" LLM returned ${memories.length} memories in ${((Date.now() - t0) / 1000).toFixed(1)}s`);
 
       if (memories.length > 0) {
-        await db.insert(agentMemories).values(
-          memories.map((m) => ({
-            agentId: agent.agentId!,
-            sourceSessionId: sessionId,
-            memoryType: m.category,
-            content: m.content,
-            importance: m.confidence === 'high' ? 0.8 : m.confidence === 'medium' ? 0.5 : 0.3,
-          })),
+        await Promise.all(
+          memories.map((m) =>
+            this.memoryService.createAgentMemory({
+              agentId: agent.agentId!,
+              content: m.content,
+              memoryType: m.category,
+              sourceSessionId: sessionId,
+              importance: m.confidence === 'high' ? 0.8 : m.confidence === 'medium' ? 0.5 : 0.3,
+            }),
+          ),
         );
       }
 
@@ -554,19 +558,37 @@ export class ArenaService {
     agentNames: string[],
     teamId: string | null | undefined,
     today: string,
+    brief?: { decisions: any[]; actionItems: any[]; unresolved: any[]; nextSessionQuestions: string[] } | null,
   ): Promise<void> {
     const topic = sessionRow?.topic || 'Untitled';
     const writes: Promise<void>[] = [];
 
+    const decisionTexts = (brief?.decisions || []).slice(0, 3).map((d: any) => d.text || d).filter(Boolean);
+    const unresolvedTexts = (brief?.unresolved || []).slice(0, 3).map((u: any) => u.topic || u).filter(Boolean);
+
     if (teamId) {
-      const teamSummary = `Session "${topic}" with ${agentNames.join(', ')}`;
+      let teamSummary = `Team session "${topic}" (${agentNames.join(', ')}).`;
+      if (decisionTexts.length > 0) teamSummary += ` Decisions: ${decisionTexts.join('; ')}.`;
+      if (unresolvedTexts.length > 0) teamSummary += ` Open: ${unresolvedTexts.join('; ')}.`;
       writes.push(this.dailyFileService.appendToDaily('team', teamId, today, teamSummary));
     }
 
     for (const agent of nativeAgents) {
       if (agent.agentId) {
+        const agentTasks = (brief?.actionItems || [])
+          .filter((a: any) => a.owner === agent.name)
+          .slice(0, 3)
+          .map((a: any) => a.task || a)
+          .filter(Boolean);
+
+        let agentEntry = `Session "${topic}":`;
+        if (decisionTexts.length > 0) agentEntry += ` Decisions: ${decisionTexts.join('; ')}.`;
+        if (agentTasks.length > 0) agentEntry += ` My tasks: ${agentTasks.join('; ')}.`;
+        if (unresolvedTexts.length > 0) agentEntry += ` Unresolved: ${unresolvedTexts.join('; ')}.`;
+        if (!brief) agentEntry = `Participated in session "${topic}"`;
+
         writes.push(
-          this.dailyFileService.appendToDaily('agent', agent.agentId, today, `Participated in session "${topic}"`),
+          this.dailyFileService.appendToDaily('agent', agent.agentId, today, agentEntry),
         );
       }
     }
@@ -685,6 +707,81 @@ export class ArenaService {
       .from(agentMemories)
       .where(eq(agentMemories.sourceSessionId, sessionId))
       .orderBy(desc(agentMemories.createdAt));
+  }
+
+  // ─── Session Continuity ─────────────────────────────────────────
+
+  async getPreviousSessionBriefs(
+    currentSessionId: string,
+    teamId?: string,
+    agentIds?: string[],
+    limit = 3,
+  ): Promise<Array<{ topic: string; endedAt: string; brief: { decisions: any[]; actionItems: any[]; unresolved: any[]; nextSessionQuestions: string[] } }>> {
+    if (!teamId && (!agentIds || agentIds.length === 0)) return [];
+
+    let rows: Array<{ topic: string | null; endedAt: Date | null; decisions: any; actionItems: any; unresolved: any; nextSessionQuestions: any }>;
+
+    if (teamId) {
+      rows = await db
+        .select({
+          topic: arenaSessions.topic,
+          endedAt: arenaSessions.endedAt,
+          decisions: arenaSessionBriefs.decisions,
+          actionItems: arenaSessionBriefs.actionItems,
+          unresolved: arenaSessionBriefs.unresolved,
+          nextSessionQuestions: arenaSessionBriefs.nextSessionQuestions,
+        })
+        .from(arenaSessions)
+        .innerJoin(arenaSessionBriefs, eq(arenaSessionBriefs.sessionId, arenaSessions.id))
+        .where(
+          and(
+            eq(arenaSessions.teamId, teamId),
+            eq(arenaSessions.status, 'ended'),
+            sql`${arenaSessions.id} != ${currentSessionId}`,
+          ),
+        )
+        .orderBy(desc(arenaSessions.endedAt))
+        .limit(limit);
+    } else {
+      // Ad-hoc: find sessions with overlapping agent participants (use subquery to avoid duplicates)
+      const agentIdList = agentIds!;
+      const matchingSessionIds = db
+        .selectDistinct({ sessionId: arenaSessionParticipants.sessionId })
+        .from(arenaSessionParticipants)
+        .where(inArray(arenaSessionParticipants.agentId, agentIdList));
+
+      rows = await db
+        .select({
+          topic: arenaSessions.topic,
+          endedAt: arenaSessions.endedAt,
+          decisions: arenaSessionBriefs.decisions,
+          actionItems: arenaSessionBriefs.actionItems,
+          unresolved: arenaSessionBriefs.unresolved,
+          nextSessionQuestions: arenaSessionBriefs.nextSessionQuestions,
+        })
+        .from(arenaSessions)
+        .innerJoin(arenaSessionBriefs, eq(arenaSessionBriefs.sessionId, arenaSessions.id))
+        .where(
+          and(
+            eq(arenaSessions.status, 'ended'),
+            sql`${arenaSessions.id} != ${currentSessionId}`,
+            inArray(arenaSessions.id, matchingSessionIds),
+          ),
+        )
+        .orderBy(desc(arenaSessions.endedAt))
+        .limit(1);
+    }
+
+    return rows.map((r) => ({
+      topic: r.topic || 'Untitled',
+      endedAt: r.endedAt?.toISOString() || '',
+      brief: {
+        decisions: (r.decisions as any[]) || [],
+        actionItems: (r.actionItems as any[]) || [],
+        unresolved: (r.unresolved as any[]) || [],
+        nextSessionQuestions: (r.nextSessionQuestions as string[]) || [],
+      },
+    }));
   }
 
   // ─── Query Methods ────────────────────────────────────────────────
