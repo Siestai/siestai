@@ -43,6 +43,13 @@
       "when": 1772700000000,
       "tag": "0005_memory_architecture",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1772800000000,
+      "tag": "0006_fix_arena_participants_cascade",
+      "breakpoints": true
     }
   ]
 }
