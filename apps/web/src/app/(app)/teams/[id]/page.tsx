@@ -44,6 +44,10 @@ export default function TeamDetailPage({ params }: { params: Promise<{ id: strin
   const [removingAgent, setRemovingAgent] = useState<TeamAgent | null>(null);
   const [removeLoading, setRemoveLoading] = useState(false);
 
+  // Delete team
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+
   // Files tab
   const [mdFiles, setMdFiles] = useState<MdFile[]>([]);
   const [editingFile, setEditingFile] = useState<string | null>(null);
@@ -134,9 +138,13 @@ export default function TeamDetailPage({ params }: { params: Promise<{ id: strin
   }
 
   async function handleDeleteTeam() {
-    if (!confirm("Delete this team? This cannot be undone.")) return;
-    await api.deleteTeam(id);
-    router.push("/teams");
+    setDeleteLoading(true);
+    try {
+      await api.deleteTeam(id);
+      router.push("/teams");
+    } finally {
+      setDeleteLoading(false);
+    }
   }
 
   if (loading || !team) {
@@ -170,7 +178,7 @@ export default function TeamDetailPage({ params }: { params: Promise<{ id: strin
             <p className="text-sm text-muted-foreground">{team.description}</p>
           )}
         </div>
-        <Button variant="ghost" size="icon" onClick={handleDeleteTeam}>
+        <Button variant="ghost" size="icon" onClick={() => setShowDeleteConfirm(true)}>
           <Trash2 className="h-4 w-4 text-destructive" />
         </Button>
       </div>
@@ -419,6 +427,37 @@ export default function TeamDetailPage({ params }: { params: Promise<{ id: strin
           )}
         </div>
       )}
+
+      {/* Delete team confirmation */}
+      <Dialog open={showDeleteConfirm} onOpenChange={(open) => !open && setShowDeleteConfirm(false)}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Delete Team</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete{" "}
+              <span className="font-medium text-foreground">{team.name}</span>?
+              This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button
+              variant="outline"
+              onClick={() => setShowDeleteConfirm(false)}
+              disabled={deleteLoading}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDeleteTeam}
+              disabled={deleteLoading}
+            >
+              {deleteLoading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Delete
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
