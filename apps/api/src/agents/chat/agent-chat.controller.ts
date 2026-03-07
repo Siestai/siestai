@@ -1,4 +1,4 @@
-import { Body, Controller, Param, Post, Res } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Res } from '@nestjs/common';
 import { Session, type UserSession } from '@thallesp/nestjs-better-auth';
 import type { Response } from 'express';
 import { createUIMessageStream, pipeUIMessageStreamToResponse } from 'ai';
@@ -9,6 +9,14 @@ import { AgentChatDto } from './agent-chat.dto';
 @Controller('agents')
 export class AgentChatController {
   constructor(private readonly chatService: AgentChatService) {}
+
+  @Get(':id/chat/history')
+  async getHistory(
+    @Param('id') id: string,
+    @Session() session: UserSession,
+  ) {
+    return this.chatService.getHistory(id, session.user.id);
+  }
 
   @Post(':id/chat')
   async chat(

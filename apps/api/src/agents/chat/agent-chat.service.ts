@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import type { UIMessage } from 'ai';
+import { convertMessages } from '@mastra/core/agent/message-list';
 import { AgentsService } from '../agents.service';
 import { ToolRegistryService } from '../../tools/tool-registry.service';
 import { MastraService } from '../../mastra/mastra.service';
@@ -77,6 +78,18 @@ export class AgentChatService {
     });
 
     return { workflowStream, ephemeralKey };
+  }
+
+  async getHistory(agentId: string, userId: string) {
+    const memory = this.mastraService.getChatMemory();
+    const threadId = `${userId}:${agentId}`;
+    const thread = await memory.getThreadById({ threadId });
+    if (!thread) return [];
+    const { messages } = await memory.recall({ threadId });
+    const uiMessages = convertMessages(messages).to('AIV5.UI');
+    return uiMessages.filter(
+      (m: any) => m.role === 'user' || m.role === 'assistant',
+    );
   }
 
   cleanupEphemeral(key: string): void {

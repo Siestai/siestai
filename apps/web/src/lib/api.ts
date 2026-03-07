@@ -160,6 +160,11 @@ class ApiClient {
     });
   }
 
+  // Chat history
+  async getChatHistory(agentId: string) {
+    return this.request<any[]>(`/agents/${agentId}/chat/history`);
+  }
+
   // Agent preview
   async previewStream(payload: AgentPreviewRequest): Promise<Response> {
     return fetch(`${this.baseUrl}/agents/preview/stream`, {

@@ -2,10 +2,12 @@
 
 import { useRef, useEffect, useState, useMemo } from "react";
 import { useChat } from "@ai-sdk/react";
+import type { UIMessage } from "ai";
 import { DefaultChatTransport } from "ai";
-import { ArrowUp, AlertCircle, MessageSquare, X } from "lucide-react";
+import { ArrowUp, AlertCircle, Loader2, MessageSquare, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ChatMessage } from "./chat-message";
+import { api } from "@/lib/api";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4200";
 
@@ -16,6 +18,50 @@ interface ChatPanelProps {
 }
 
 export function ChatPanel({ agentId, agentName, onClose }: ChatPanelProps) {
+  const [initialMessages, setInitialMessages] = useState<UIMessage[] | null>(null);
+
+  useEffect(() => {
+    api.getChatHistory(agentId).then(
+      (msgs) => setInitialMessages(msgs),
+      () => setInitialMessages([]),
+    );
+  }, [agentId]);
+
+  if (initialMessages === null) {
+    return (
+      <div className="flex flex-col h-full overflow-hidden">
+        <div className="flex items-center gap-2 px-4 py-3 border-b border-border bg-card/50">
+          <MessageSquare className="h-4 w-4 text-cyan-400" />
+          <span className="text-sm font-medium text-foreground truncate">{agentName}</span>
+          {onClose && (
+            <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 ml-auto" onClick={onClose}>
+              <X className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
+        <div className="flex-1 flex items-center justify-center">
+          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <ChatPanelInner
+      agentId={agentId}
+      agentName={agentName}
+      onClose={onClose}
+      initialMessages={initialMessages}
+    />
+  );
+}
+
+function ChatPanelInner({
+  agentId,
+  agentName,
+  onClose,
+  initialMessages,
+}: ChatPanelProps & { initialMessages: UIMessage[] }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [input, setInput] = useState("");
 
@@ -28,7 +74,10 @@ export function ChatPanel({ agentId, agentName, onClose }: ChatPanelProps) {
     [agentId],
   );
 
-  const { messages, sendMessage, status, error } = useChat({ transport });
+  const { messages, sendMessage, status, error } = useChat({
+    transport,
+    messages: initialMessages,
+  });
 
   const isActive = status === "submitted" || status === "streaming";
 
