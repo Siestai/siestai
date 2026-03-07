@@ -6,6 +6,8 @@ import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import {
   ArrowLeft,
+  Bot,
+  Loader2,
   Users,
   FileText,
   Brain,
@@ -15,6 +17,15 @@ import {
   Search,
   Trash2,
 } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import { AddAgentDialog } from "@/components/teams/add-agent-dialog";
+import { AgentIcon } from "@/components/teams/agent-icon";
 import type { Team, TeamAgent, MdFile, DailyMemoryFile, MemorySearchResult, Agent } from "@/lib/types";
 
 type Tab = "agents" | "files" | "memory" | "daily";
@@ -30,6 +41,8 @@ export default function TeamDetailPage({ params }: { params: Promise<{ id: strin
   const [teamAgents, setTeamAgents] = useState<TeamAgent[]>([]);
   const [allAgents, setAllAgents] = useState<Agent[]>([]);
   const [showAddAgent, setShowAddAgent] = useState(false);
+  const [removingAgent, setRemovingAgent] = useState<TeamAgent | null>(null);
+  const [removeLoading, setRemoveLoading] = useState(false);
 
   // Files tab
   const [mdFiles, setMdFiles] = useState<MdFile[]>([]);
@@ -91,9 +104,16 @@ export default function TeamDetailPage({ params }: { params: Promise<{ id: strin
     await loadAgents();
   }
 
-  async function handleRemoveAgent(agentId: string) {
-    await api.removeTeamAgent(id, agentId);
-    await loadAgents();
+  async function handleRemoveAgent() {
+    if (!removingAgent) return;
+    setRemoveLoading(true);
+    try {
+      await api.removeTeamAgent(id, removingAgent.agentId);
+      setRemovingAgent(null);
+      await loadAgents();
+    } finally {
+      setRemoveLoading(false);
+    }
   }
 
   async function handleSaveFile(fileKey: string) {
@@ -178,65 +198,100 @@ export default function TeamDetailPage({ params }: { params: Promise<{ id: strin
 
       {/* Tab Content */}
       {tab === "agents" && (
-        <div className="space-y-3">
+        <div className="space-y-4">
           <div className="flex justify-end">
-            <Button size="sm" onClick={() => setShowAddAgent(!showAddAgent)}>
+            <Button size="sm" onClick={() => { if (allAgents.length === 0) loadAgents(); setShowAddAgent(true); }}>
               <Plus className="h-4 w-4 mr-1" />
               Add Agent
             </Button>
           </div>
 
-          {showAddAgent && availableAgents.length > 0 && (
-            <div className="rounded-lg border border-border bg-card p-3 space-y-2">
-              <p className="text-sm text-muted-foreground">Select an agent to add:</p>
-              {availableAgents.map((agent) => (
-                <button
-                  key={agent.id}
-                  onClick={() => handleAddAgent(agent.id)}
-                  className="flex items-center gap-2 w-full rounded-md px-3 py-2 text-sm text-foreground hover:bg-secondary/50 transition-colors"
-                >
+          {teamAgents.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-12 text-center">
+              <Users className="h-10 w-10 text-muted-foreground/30 mb-3" />
+              <p className="text-muted-foreground">No agents in this team yet</p>
+              <p className="text-sm text-muted-foreground/60 mt-1">
+                Add agents to start collaborating
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+              {teamAgents.map((ta) => {
+                const color = ta.agent?.color || "#22d3ee";
+                return (
                   <div
-                    className="h-3 w-3 rounded-full"
-                    style={{ backgroundColor: agent.color }}
-                  />
-                  {agent.name}
-                </button>
-              ))}
+                    key={ta.id}
+                    className="group relative flex flex-col items-center gap-2.5 rounded-xl border border-border bg-card p-4 transition-all hover:border-primary/30 hover:bg-secondary/20"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => setRemovingAgent(ta)}
+                      className="absolute top-2 right-2 p-1 rounded-md opacity-0 group-hover:opacity-100 hover:bg-destructive/10 transition-all"
+                      title="Remove from team"
+                    >
+                      <X className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
+                    </button>
+                    <div
+                      className="w-12 h-12 rounded-2xl flex items-center justify-center cursor-pointer transition-transform hover:scale-110"
+                      style={{ backgroundColor: `${color}20`, color }}
+                      onClick={() => router.push(`/agents/${ta.agentId}`)}
+                    >
+                      <Bot className="h-5 w-5" />
+                    </div>
+                    <div className="text-center min-w-0 w-full">
+                      <p
+                        className="text-sm font-medium text-foreground truncate cursor-pointer hover:text-primary transition-colors"
+                        onClick={() => router.push(`/agents/${ta.agentId}`)}
+                      >
+                        {ta.agent?.name || "Unknown"}
+                      </p>
+                      <p className="text-xs text-muted-foreground truncate">{ta.role}</p>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           )}
 
-          {teamAgents.length === 0 ? (
-            <p className="text-center text-muted-foreground py-8">No agents in this team yet</p>
-          ) : (
-            teamAgents.map((ta) => (
-              <div
-                key={ta.id}
-                className="flex items-center justify-between rounded-lg border border-border bg-card p-3"
-              >
-                <div className="flex items-center gap-3">
-                  <div
-                    className="h-8 w-8 rounded-lg flex items-center justify-center text-white text-xs font-bold"
-                    style={{ backgroundColor: ta.agent?.color || "#3b82f6" }}
-                  >
-                    {ta.agent?.name?.charAt(0) || "?"}
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-foreground">
-                      {ta.agent?.name || "Unknown"}
-                    </p>
-                    <p className="text-xs text-muted-foreground">{ta.role}</p>
-                  </div>
-                </div>
+          <AddAgentDialog
+            open={showAddAgent}
+            onOpenChange={setShowAddAgent}
+            availableAgents={availableAgents}
+            loading={allAgents.length === 0}
+            onAdd={handleAddAgent}
+          />
+
+          <Dialog open={!!removingAgent} onOpenChange={(open) => !open && setRemovingAgent(null)}>
+            <DialogContent className="sm:max-w-sm">
+              <DialogHeader>
+                <DialogTitle>Remove Agent</DialogTitle>
+                <DialogDescription>
+                  Are you sure you want to remove{" "}
+                  <span className="font-medium text-foreground">
+                    {removingAgent?.agent?.name || "this agent"}
+                  </span>{" "}
+                  from the team?
+                </DialogDescription>
+              </DialogHeader>
+              <div className="flex justify-end gap-2 pt-2">
                 <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => handleRemoveAgent(ta.agentId)}
+                  variant="outline"
+                  onClick={() => setRemovingAgent(null)}
+                  disabled={removeLoading}
                 >
-                  <X className="h-4 w-4 text-muted-foreground" />
+                  Cancel
+                </Button>
+                <Button
+                  variant="destructive"
+                  onClick={handleRemoveAgent}
+                  disabled={removeLoading}
+                >
+                  {removeLoading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                  Remove
                 </Button>
               </div>
-            ))
-          )}
+            </DialogContent>
+          </Dialog>
         </div>
       )}
 
