@@ -49,7 +49,7 @@ class ApiClient {
   // Health
   async checkHealth(): Promise<HealthResponse> {
     try {
-      return await this.request<HealthResponse>("/api/health");
+      return await this.request<HealthResponse>("/health");
     } catch {
       return { status: "error", service: "siestai-api" };
     }
