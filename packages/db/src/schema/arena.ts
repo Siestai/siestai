@@ -29,7 +29,7 @@ export const arenaSessionParticipants = pgTable('arena_session_participants', {
   sessionId: uuid('session_id')
     .notNull()
     .references(() => arenaSessions.id, { onDelete: 'cascade' }),
-  agentId: uuid('agent_id').references(() => agents.id),
+  agentId: uuid('agent_id').references(() => agents.id, { onDelete: 'cascade' }),
   name: varchar('name', { length: 100 }).notNull(),
   type: varchar('type', { length: 20 }).notNull(),
   instructions: text('instructions'),
