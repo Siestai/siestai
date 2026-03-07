@@ -217,6 +217,26 @@
   transform-origin: 140px 140px;
 }
 
+/* Folder open animation */
+@keyframes folder-open {
+  from { opacity: 0; transform: scale(0.85); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.animate-folder-open {
+  animation: folder-open 0.25s ease-out;
+}
+
+/* Backdrop fade-in animation */
+@keyframes backdrop-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.animate-backdrop-fade-in {
+  animation: backdrop-fade-in 0.2s ease-out;
+}
+
 /* Agent gradient */
 .agent-gradient {
   background: linear-gradient(135deg, var(--agent-gradient-start), var(--agent-gradient-end));
