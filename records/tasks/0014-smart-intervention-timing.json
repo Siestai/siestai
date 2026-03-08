@@ -1,0 +1,53 @@
+{
+  "plan": "0014-smart-intervention-timing",
+  "phases": [
+    {
+      "phase": 1,
+      "name": "Intervention Scorer",
+      "tasks": [
+        {
+          "id": "SIT-001",
+          "title": "Create InterventionScorer class",
+          "description": "Rule-based scoring engine: VAD state, turn dynamics, question detection, cooldown timer. Configurable weights and threshold.",
+          "file": "apps/agent/src/intervention-scorer.ts",
+          "status": "pending"
+        },
+        {
+          "id": "SIT-002",
+          "title": "Wire VAD events into scorer",
+          "description": "In main.ts, subscribe to VAD speech start/end events and feed them to the scorer. Track human speech state and silence duration.",
+          "file": "apps/agent/src/main.ts",
+          "status": "pending"
+        },
+        {
+          "id": "SIT-003",
+          "title": "Replace blind follow-up logic",
+          "description": "Refactor setupFollowUpTurns to consult InterventionScorer before triggering generateReply. Skip turn if score below threshold.",
+          "file": "apps/agent/src/main.ts",
+          "status": "pending"
+        },
+        {
+          "id": "SIT-004",
+          "title": "Add intervention config to metadata",
+          "description": "Extend ArenaMetadata with optional intervention config (weights, threshold, cooldown). Pass from backend via room metadata.",
+          "file": "apps/agent/src/arena-agent.ts",
+          "status": "pending"
+        },
+        {
+          "id": "SIT-005",
+          "title": "Add intervention thresholds to provider config",
+          "description": "Default weights and thresholds in provider-config.ts for easy tuning.",
+          "file": "apps/agent/src/provider-config.ts",
+          "status": "pending"
+        },
+        {
+          "id": "SIT-006",
+          "title": "Intervention decision logging",
+          "description": "Log every intervention decision (score, components, outcome) for future ML training data.",
+          "file": "apps/agent/src/intervention-scorer.ts",
+          "status": "pending"
+        }
+      ]
+    }
+  ]
+}
