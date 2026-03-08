@@ -11,6 +11,8 @@ import { ArenaAgent, type ArenaMetadata, buildArenaGreeting } from './arena-agen
 import { MultiVoiceTTS } from './multi-voice-tts.js';
 import { DIRECT_PROVIDER_CONFIG } from './provider-config.js';
 import { ToolExecutor } from './tool-executor.js';
+import { InterventionScorer } from './intervention-scorer.js';
+import { INTERVENTION_DEFAULTS } from './provider-config.js';
 
 dotenv.config({ path: '.env.local' });
 
@@ -265,21 +267,28 @@ interface AgentOnlyState {
 }
 
 /**
- * Set up follow-up turn logic so agents respond to each other.
+ * Set up follow-up turn logic gated by Smart Intervention Timing (SIT).
  *
- * In human_collab mode (default): capped at MAX_FOLLOW_UPS (3) consecutive
- * follow-up turns before waiting for the next human input.
+ * Instead of blindly triggering follow-ups after every agent turn, the
+ * InterventionScorer evaluates whether an agent should speak based on:
+ * - VAD state (is the human speaking?)
+ * - Turn dynamics (how many consecutive agent turns?)
+ * - Question detection (was a question asked?)
+ * - Conversation completeness (is the point made?)
  *
- * In agent_only mode: higher follow-up limit (10), and when reached, resets
- * and triggers a continuation prompt instead of stopping. [DONE] triggers
- * a new discussion angle after a brief pause.
+ * Inspired by GroupGPT (arXiv:2603.01059) but adapted for voice with
+ * LiveKit VAD — a real-time signal no text framework has.
+ *
+ * In agent_only mode: higher tolerance for consecutive turns, and [DONE]
+ * triggers a new discussion angle instead of stopping.
  */
 function setupFollowUpTurns(
   session: voice.AgentSession,
+  scorer: InterventionScorer,
   isAgentOnly = false,
   state?: AgentOnlyState,
 ): void {
-  const MAX_FOLLOW_UPS = isAgentOnly ? 10 : 3;
+  const MAX_FOLLOW_UPS = isAgentOnly ? 10 : 5;
   let followUpCount = 0;
   let lastFollowUpSpeaker: string | null = null;
 
@@ -288,6 +297,10 @@ function setupFollowUpTurns(
   session.on(voice.AgentSessionEventTypes.Close, () => {
     followUpCount = 0;
     lastFollowUpSpeaker = null;
+    getLogger().info(
+      { totalDecisions: scorer.totalDecisions },
+      '[SIT] Session closed — intervention scoring complete',
+    );
   });
 
   session.on(voice.AgentSessionEventTypes.ConversationItemAdded, (ev) => {
@@ -296,6 +309,7 @@ function setupFollowUpTurns(
         followUpCount = 0;
         lastFollowUpSpeaker = null;
       }
+      scorer.onHumanInput();
       return;
     }
 
@@ -303,7 +317,10 @@ function setupFollowUpTurns(
 
     const text = ev.item.textContent ?? '';
 
-    // --- Wind-down branch ---
+    // Update scorer with agent turn
+    scorer.onAgentTurn(text);
+
+    // --- Wind-down branch (unchanged — wind-down overrides SIT) ---
     if (state?.windingDown) {
       if (text.includes('[DONE]')) {
         followUpCount = 0;
@@ -356,7 +373,7 @@ function setupFollowUpTurns(
       return;
     }
 
-    // Max follow-ups reached
+    // Hard cap on follow-ups (safety net above SIT)
     if (followUpCount >= MAX_FOLLOW_UPS) {
       followUpCount = 0;
       lastFollowUpSpeaker = null;
@@ -393,7 +410,40 @@ function setupFollowUpTurns(
     lastFollowUpSpeaker = speaker;
     followUpCount++;
 
-    // Trigger follow-up turn
+    // ── SIT: Consult the intervention scorer ──
+    const decision = scorer.evaluate();
+
+    if (!decision.shouldIntervene) {
+      // Score too low — skip this follow-up turn
+      getLogger().debug(
+        { score: decision.score.toFixed(3), reason: decision.reason, followUpCount },
+        '[SIT] Skipping follow-up turn',
+      );
+
+      // In agent_only mode, schedule a re-evaluation after a brief pause
+      // (silence accumulation may push the score above threshold)
+      if (isAgentOnly) {
+        setTimeout(() => {
+          const retry = scorer.evaluate();
+          if (retry.shouldIntervene) {
+            try {
+              session.generateReply({
+                userInput:
+                  '[System: Continue the discussion if there is more to explore. A different character should speak next.]',
+              });
+            } catch (err) {
+              getLogger().warn(
+                { error: err instanceof Error ? err.message : String(err) },
+                '[SIT] Delayed agent-only follow-up failed',
+              );
+            }
+          }
+        }, 3000);
+      }
+      return;
+    }
+
+    // Score above threshold — trigger follow-up turn
     try {
       session.generateReply({
         userInput:
@@ -653,13 +703,38 @@ export default defineAgent({
       throw error;
     }
 
-    // Set up follow-up turns so agents respond to each other
+    // Set up Smart Intervention Timing (SIT)
     const isAgentOnly = arenaMetadata.participationMode === 'agent_only';
     const agentOnlyState: AgentOnlyState | undefined = isAgentOnly
       ? { windingDown: false, windDownTurnsRemaining: 0 }
       : undefined;
 
-    setupFollowUpTurns(session, isAgentOnly, agentOnlyState);
+    // Create intervention scorer with optional per-session config from metadata
+    const scorer = new InterventionScorer({
+      ...INTERVENTION_DEFAULTS,
+      ...arenaMetadata.interventionConfig,
+    });
+
+    // Wire VAD events into the scorer for real-time speech detection
+    session.on(voice.AgentSessionEventTypes.UserStartedSpeaking, () => {
+      scorer.onHumanSpeechStart();
+      logger.debug('[SIT] Human speech started (VAD)');
+    });
+    session.on(voice.AgentSessionEventTypes.UserStoppedSpeaking, () => {
+      scorer.onHumanSpeechEnd();
+      logger.debug('[SIT] Human speech ended (VAD)');
+    });
+
+    logger.info(
+      {
+        threshold: scorer['config'].threshold,
+        cooldownMs: scorer['config'].cooldownMs,
+        isAgentOnly,
+      },
+      '[SIT] Intervention scorer initialized',
+    );
+
+    setupFollowUpTurns(session, scorer, isAgentOnly, agentOnlyState);
 
     // Bridge: post assistant transcripts to backend for WS clients (LiveKit → WS)
     if (arenaMetadata.sessionId && arenaMetadata.backendUrl) {

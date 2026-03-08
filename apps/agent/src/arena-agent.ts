@@ -1,4 +1,5 @@
 import { log, voice } from '@livekit/agents';
+import type { InterventionConfig } from './intervention-scorer.js';
 
 export interface ArenaToolDef {
   slug: string;
@@ -24,6 +25,7 @@ export interface ArenaMetadata {
   backendUrl?: string;
   toolSecret?: string;
   sessionContinuity?: string;
+  interventionConfig?: Partial<InterventionConfig>;
   isFirstTeamMeeting?: boolean;
 }
 
