@@ -80,6 +80,10 @@ export type ArenaWsServerMessage =
       roomName: string;
     }
   | {
+      type: 'arena_action';
+      action: ArenaAction;
+    }
+  | {
       type: 'session_ended';
     };
 
@@ -136,6 +140,33 @@ export interface ArenaSessionBrief {
   nextSessionQuestions: string[];
   createdAt: string;
 }
+
+// --- Arena Actions ---
+
+/** All known arena action types. Extend this union to add new actions. */
+export type ArenaActionType = 'team_first_meeting';
+
+interface ArenaActionBase {
+  type: ArenaActionType;
+  label: string;
+  description: string;
+  timestamp: string;
+}
+
+export interface TeamFirstMeetingAction extends ArenaActionBase {
+  type: 'team_first_meeting';
+  meta: { teamId: string; teamName: string };
+}
+
+/**
+ * Discriminated union of all arena actions.
+ * To add a new action:
+ *   1. Add the type literal to ArenaActionType
+ *   2. Create an interface extending ArenaActionBase
+ *   3. Add it to this union
+ *   4. Add an evaluator in arena.service.ts → ACTION_EVALUATORS
+ */
+export type ArenaAction = TeamFirstMeetingAction;
 
 // --- Arena History types ---
 

@@ -1,5 +1,6 @@
 import type {
   ArenaMode,
+  ArenaAction,
   ArenaInvite,
   ArenaParticipant,
   ArenaSession,
@@ -25,6 +26,7 @@ export interface CreateArenaSessionResponse {
   session: ArenaSession;
   invite: ArenaInvite;
   hostToken: string;
+  actions: ArenaAction[];
 }
 
 export interface JoinArenaParams {

@@ -40,7 +40,7 @@ import {
   type ArenaSessionRow,
   type ArenaSessionParticipantRow,
 } from '@siestai/db';
-import type { ArenaSessionSummary, PaginatedArenaSessions } from '@siestai/shared';
+import type { ArenaSessionSummary, PaginatedArenaSessions, ArenaAction } from '@siestai/shared';
 import { ListArenaSessionsDto } from './dto/list-arena-sessions.dto';
 
 const AGENT_COLORS = [
@@ -86,6 +86,7 @@ export class ArenaService {
     session: ArenaSession;
     invite: { token: string; url: string; expiresAt: string };
     hostToken: string;
+    actions: ArenaAction[];
   }> {
     const [sessionRow] = await db
       .insert(arenaSessions)
@@ -151,10 +152,13 @@ export class ArenaService {
     const url = this.invitationService.buildInviteUrl(invite.token);
     const hostToken = this.invitationService.generateHostToken(sessionRow.id);
 
+    const actions = await this.evaluateActions(sessionRow);
+
     return {
       session,
       invite: { token: invite.token, url, expiresAt: invite.expiresAt },
       hostToken,
+      actions,
     };
   }
 
@@ -728,6 +732,56 @@ export class ArenaService {
       .from(agentMemories)
       .where(eq(agentMemories.sourceSessionId, sessionId))
       .orderBy(desc(agentMemories.createdAt));
+  }
+
+  // ─── Arena Actions ──────────────────────────────────────────────
+
+  /**
+   * Evaluate all registered action conditions for a session.
+   * Each evaluator returns an ArenaAction or null.
+   * To add a new action, add an evaluator to this array.
+   */
+  private async evaluateActions(sessionRow: ArenaSessionRow): Promise<ArenaAction[]> {
+    const evaluators: Array<(row: ArenaSessionRow) => Promise<ArenaAction | null>> = [
+      (row) => this.evaluateTeamFirstMeeting(row),
+      // Add new action evaluators here:
+      // (row) => this.evaluateSomeOtherAction(row),
+    ];
+
+    const results = await Promise.all(evaluators.map((fn) => fn(sessionRow)));
+    return results.filter((a): a is ArenaAction => a !== null);
+  }
+
+  private async evaluateTeamFirstMeeting(row: ArenaSessionRow): Promise<ArenaAction | null> {
+    if (!row.teamId) return null;
+
+    // Check if this team has any previous ended sessions
+    const [result] = await db
+      .select({ total: count() })
+      .from(arenaSessions)
+      .where(
+        and(
+          eq(arenaSessions.teamId, row.teamId),
+          eq(arenaSessions.status, 'ended'),
+          sql`${arenaSessions.id} != ${row.id}`,
+        ),
+      );
+
+    if (result && result.total > 0) return null;
+
+    // Fetch team name
+    const [team] = await db
+      .select({ name: teams.name })
+      .from(teams)
+      .where(eq(teams.id, row.teamId));
+
+    return {
+      type: 'team_first_meeting',
+      label: 'First Team Meeting',
+      description: `This is the first arena session for team "${team?.name ?? 'Unknown'}"`,
+      timestamp: new Date().toISOString(),
+      meta: { teamId: row.teamId, teamName: team?.name ?? 'Unknown' },
+    };
   }
 
   // ─── Session Continuity ─────────────────────────────────────────

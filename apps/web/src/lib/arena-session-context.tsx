@@ -10,6 +10,7 @@ import {
   type ReactNode,
 } from "react";
 import type {
+  ArenaAction,
   ArenaInvite,
   ArenaLiveState,
   ArenaParticipant,
@@ -31,6 +32,7 @@ interface ArenaSessionContextValue {
   session: ArenaSession | null;
   invite: ArenaInvite | null;
   participants: ArenaParticipant[];
+  actions: ArenaAction[];
   connectionStatus: ConnectionStatus;
   liveState: ArenaLiveState | null;
   wsMessages: TranscriptMessage[];
@@ -47,6 +49,7 @@ export function ArenaSessionProvider({ children }: { children: ReactNode }) {
   const [invite, setInvite] = useState<ArenaInvite | null>(null);
   const hostTokenRef = useRef<string | null>(null);
   const [participants, setParticipants] = useState<ArenaParticipant[]>([]);
+  const [actions, setActions] = useState<ArenaAction[]>([]);
   const [connectionStatus, setConnectionStatus] =
     useState<ConnectionStatus>("disconnected");
   const [liveState, setLiveState] = useState<ArenaLiveState | null>(null);
@@ -68,6 +71,7 @@ export function ArenaSessionProvider({ children }: { children: ReactNode }) {
       setInvite(result.invite);
       hostTokenRef.current = result.hostToken;
       setParticipants(result.session.participants);
+      setActions(result.actions ?? []);
     },
     [],
   );
@@ -130,6 +134,9 @@ export function ArenaSessionProvider({ children }: { children: ReactNode }) {
           });
           break;
         }
+        case "arena_action":
+          setActions((prev) => [...prev, msg.action]);
+          break;
         case "transcript":
           // Ignore — native agent transcripts are already delivered
           // in real-time via LiveKit agentTranscriptions.
@@ -169,6 +176,7 @@ export function ArenaSessionProvider({ children }: { children: ReactNode }) {
     setInvite(null);
     hostTokenRef.current = null;
     setParticipants([]);
+    setActions([]);
     setLiveState(null);
     setWsMessages([]);
 
@@ -187,6 +195,7 @@ export function ArenaSessionProvider({ children }: { children: ReactNode }) {
         session,
         invite,
         participants,
+        actions,
         connectionStatus,
         liveState,
         wsMessages,

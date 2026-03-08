@@ -38,6 +38,7 @@ import { ArenaRoom } from "@/components/arena/arena-room";
 import { AgentPicker } from "@/components/arena/agent-picker";
 import { TeamPicker } from "@/components/arena/team-picker";
 import { ArenaHistory } from "@/components/arena/arena-history";
+import { ArenaActionBadges } from "@/components/arena/arena-action-badges";
 import type { Team, TeamAgent } from "@/lib/types";
 import { api } from "@/lib/api";
 
@@ -790,6 +791,9 @@ function ArenaPageContent() {
         </div>
 
         <div className="max-w-2xl mx-auto space-y-6">
+          {/* Arena action badges */}
+          <ArenaActionBadges actions={arenaSession.actions} />
+
           {/* Native agents summary */}
           {arenaSession.participants.filter((p) => p.type === "native_agent")
             .length > 0 && (
@@ -862,6 +866,7 @@ function ArenaPageContent() {
 
     return (
       <div className="container mx-auto px-4 py-6 lg:px-6 lg:py-8">
+        <ArenaActionBadges actions={arenaSession.actions} />
         <LiveKitRoom
           serverUrl={arenaSession.liveState.serverUrl}
           token={arenaSession.liveState.token}

@@ -27,6 +27,9 @@ export {
   type ArenaSessionSummary,
   type PaginatedArenaSessions,
   type ArenaHistoryFilters,
+  type ArenaActionType,
+  type ArenaAction,
+  type TeamFirstMeetingAction,
 } from './types/arena';
 
 export {
