@@ -16,6 +16,7 @@ import {
   X,
   Search,
   Trash2,
+  Video,
 } from "lucide-react";
 import {
   Dialog,
@@ -26,9 +27,10 @@ import {
 } from "@/components/ui/dialog";
 import { AddAgentDialog } from "@/components/teams/add-agent-dialog";
 import { AgentIcon } from "@/components/teams/agent-icon";
-import type { Team, TeamAgent, MdFile, DailyMemoryFile, MemorySearchResult, Agent } from "@/lib/types";
+import { listArenaSessions } from "@/lib/arena-api";
+import type { Team, TeamAgent, MdFile, DailyMemoryFile, MemorySearchResult, Agent, ArenaSessionSummary } from "@/lib/types";
 
-type Tab = "agents" | "files" | "memory" | "daily";
+type Tab = "agents" | "files" | "memory" | "daily" | "meetings";
 
 export default function TeamDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -61,6 +63,10 @@ export default function TeamDetailPage({ params }: { params: Promise<{ id: strin
   // Daily tab
   const [dailyFiles, setDailyFiles] = useState<DailyMemoryFile[]>([]);
 
+  // Meetings tab
+  const [meetings, setMeetings] = useState<ArenaSessionSummary[]>([]);
+  const [meetingsLoading, setMeetingsLoading] = useState(false);
+
   useEffect(() => {
     loadTeam();
   }, [id]);
@@ -70,6 +76,7 @@ export default function TeamDetailPage({ params }: { params: Promise<{ id: strin
     if (tab === "agents") loadAgents();
     if (tab === "files") loadFiles();
     if (tab === "daily") loadDaily();
+    if (tab === "meetings") loadMeetings();
   }, [tab, team]);
 
   async function loadTeam() {
@@ -100,6 +107,18 @@ export default function TeamDetailPage({ params }: { params: Promise<{ id: strin
   async function loadDaily() {
     const files = await api.getTeamDailyFiles(id);
     setDailyFiles(files);
+  }
+
+  async function loadMeetings() {
+    setMeetingsLoading(true);
+    try {
+      const result = await listArenaSessions({ teamId: id, limit: 50 });
+      setMeetings(result.data);
+    } catch {
+      setMeetings([]);
+    } finally {
+      setMeetingsLoading(false);
+    }
   }
 
   async function handleAddAgent(agentId: string) {
@@ -157,6 +176,7 @@ export default function TeamDetailPage({ params }: { params: Promise<{ id: strin
 
   const tabs: { key: Tab; label: string; icon: typeof Users }[] = [
     { key: "agents", label: "Agents", icon: Users },
+    { key: "meetings", label: "Meetings", icon: Video },
     { key: "files", label: "Files", icon: FileText },
     { key: "memory", label: "Memory", icon: Brain },
     { key: "daily", label: "Daily Log", icon: Calendar },
@@ -300,6 +320,72 @@ export default function TeamDetailPage({ params }: { params: Promise<{ id: strin
               </div>
             </DialogContent>
           </Dialog>
+        </div>
+      )}
+
+      {tab === "meetings" && (
+        <div className="space-y-4">
+          <div className="flex justify-end">
+            <Button size="sm" onClick={() => router.push(`/arena?team_id=${id}`)}>
+              <Video className="h-4 w-4 mr-1" />
+              Start Meeting
+            </Button>
+          </div>
+
+          {meetingsLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : meetings.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-12 text-center">
+              <Video className="h-10 w-10 text-muted-foreground/30 mb-3" />
+              <p className="text-muted-foreground">No meetings yet</p>
+              <p className="text-sm text-muted-foreground/60 mt-1">
+                Start your first team meeting in the Arena
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {meetings.map((session) => (
+                <button
+                  key={session.id}
+                  type="button"
+                  onClick={() => router.push(`/arena/history/${session.id}`)}
+                  className="w-full text-left rounded-lg border border-border bg-card p-4 hover:border-primary/30 hover:bg-secondary/20 transition-all"
+                >
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-sm font-medium text-foreground truncate max-w-[60%]">
+                      {session.topic || "Untitled meeting"}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${
+                        session.status === "ended"
+                          ? "bg-muted text-muted-foreground"
+                          : session.status === "active"
+                            ? "bg-green-500/15 text-green-400"
+                            : "bg-yellow-500/15 text-yellow-400"
+                      }`}>
+                        {session.status}
+                      </span>
+                      <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-secondary text-muted-foreground">
+                        {session.participationMode === "human_collab" ? "Collab" : "Observe"}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                    <span>{new Date(session.createdAt).toLocaleDateString()}</span>
+                    <span className="flex items-center gap-1">
+                      <Users className="h-3 w-3" />
+                      {session.participantCount}
+                    </span>
+                    {session.durationMinutes != null && (
+                      <span>{session.durationMinutes} min</span>
+                    )}
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       )}
 

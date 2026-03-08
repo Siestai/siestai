@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, Suspense, useRef } from "react";
+import { useState, Suspense, useRef, useEffect } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import {
   Users,
   Bot,
@@ -49,8 +50,11 @@ const STEPS = [
 ] as const;
 
 function ArenaPageContent() {
+  const searchParams = useSearchParams();
   const [pageState, setPageState] = useState<PageState>("setup");
-  const [activeView, setActiveView] = useState<"new" | "history">("new");
+  const [activeView, setActiveView] = useState<"new" | "history">(
+    searchParams.get("tab") === "history" ? "history" : "new",
+  );
   const [step, setStep] = useState(1);
   const [participationMode, setParticipationMode] =
     useState<ParticipationMode>("human_collab");
@@ -73,6 +77,32 @@ function ArenaPageContent() {
   const [endedSessionId, setEndedSessionId] = useState<string | null>(null);
 
   const arenaSession = useArenaSession();
+
+  // Auto-select team from query param (e.g. from team detail page "Start Meeting" button)
+  const initialTeamId = searchParams.get("team_id");
+  const [teamAutoLoaded, setTeamAutoLoaded] = useState(false);
+
+  useEffect(() => {
+    if (!initialTeamId || teamAutoLoaded) return;
+    setTeamAutoLoaded(true);
+    setConfigMode("team");
+    // Fetch team and its agents
+    (async () => {
+      try {
+        const [teamData, teams] = await Promise.all([
+          api.getTeamAgents(initialTeamId),
+          api.listTeams(),
+        ]);
+        const team = teams.find((t: Team) => t.id === initialTeamId);
+        if (team) {
+          setSelectedTeam(team);
+          setTeamAgents(teamData);
+        }
+      } catch {
+        // Silently fail — user can manually select
+      }
+    })();
+  }, [initialTeamId, teamAutoLoaded]);
 
   const agentOnlyNeedsTopic =
     participationMode === "agent_only" && !topic.trim();

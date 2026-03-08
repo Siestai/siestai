@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, Param, Post, Query, Res, UsePipes, ValidationPipe } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Param, Post, Query, Res, UsePipes, ValidationPipe } from '@nestjs/common';
 import type { Response } from 'express';
 import { AllowAnonymous } from '@thallesp/nestjs-better-auth';
 import { ArenaService } from './arena.service';
@@ -41,6 +41,12 @@ export class ArenaController {
   @Get('sessions/:id')
   async getSession(@Param('id') id: string) {
     return this.arenaService.getSession(id);
+  }
+
+  @Delete('sessions/:id')
+  @HttpCode(204)
+  async deleteSession(@Param('id') id: string): Promise<void> {
+    await this.arenaService.deleteSession(id);
   }
 
   @Get('sessions/:id/transcript')
@@ -146,12 +152,15 @@ export class ArenaController {
       sessionContinuity = continuityText.length > 2000 ? continuityText.substring(0, 1997) + '...' : continuityText;
     }
 
+    const isFirstTeamMeeting = !!session.teamId && previousBriefs.length === 0;
+
     const result = await this.livekitService.generateArenaToken(
       session,
       agentMemories.size > 0 ? agentMemories : undefined,
       agentToolDefs.size > 0 ? agentToolDefs : undefined,
       sessionContinuity,
       agentTeamNames.size > 0 ? agentTeamNames : undefined,
+      isFirstTeamMeeting,
     );
     await this.arenaService.startSession(id, result.roomName);
     this.arenaGateway.broadcastSessionStarted(id, result.roomName);

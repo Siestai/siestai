@@ -118,6 +118,20 @@ export async function getArenaSessionBrief(
   return response.json() as Promise<ArenaSessionBrief>;
 }
 
+export async function deleteArenaSession(sessionId: string): Promise<void> {
+  const response = await fetch(`${API_URL}/arena/sessions/${sessionId}`, {
+    method: "DELETE",
+    credentials: "include",
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text().catch(() => "Unknown error");
+    throw new Error(
+      `Failed to delete arena session: ${response.status} ${errorText}`,
+    );
+  }
+}
+
 export async function endArenaSession(sessionId: string): Promise<void> {
   const response = await fetch(`${API_URL}/arena/sessions/${sessionId}/end`, {
     method: "POST",

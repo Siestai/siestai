@@ -24,6 +24,7 @@ export interface ArenaMetadata {
   backendUrl?: string;
   toolSecret?: string;
   sessionContinuity?: string;
+  isFirstTeamMeeting?: boolean;
 }
 
 /**
@@ -107,7 +108,23 @@ export class ArenaAgent extends voice.Agent {
       sections.push(metadata.sessionContinuity);
     }
 
-    // 3c. Tools available to agents
+    // 3c. First team meeting instructions
+    if (metadata.isFirstTeamMeeting) {
+      sections.push('');
+      sections.push('## First Team Meeting');
+      sections.push(
+        'This is the FIRST meeting for this team. The agents have never met before.',
+      );
+      sections.push(
+        '- Introduce yourself warmly — share your name, role, and key capabilities',
+      );
+      sections.push('- Show genuine curiosity about other team members');
+      sections.push('- Establish rapport before diving into the topic');
+      sections.push('- Be friendly, open, and collaborative');
+      sections.push('- Briefly mention what you can contribute to the team');
+    }
+
+    // 3d. Tools available to agents
     const allTools = metadata.agents.flatMap((a) => a.tools ?? []);
     if (allTools.length > 0) {
       // Deduplicate by slug
@@ -213,6 +230,21 @@ export class ArenaAgent extends voice.Agent {
           );
         }
       }
+      // Re-add first team meeting instructions
+      if (metadata.isFirstTeamMeeting) {
+        truncatedSections.push('');
+        truncatedSections.push('## First Team Meeting');
+        truncatedSections.push(
+          'This is the FIRST meeting for this team. The agents have never met before.',
+        );
+        truncatedSections.push(
+          '- Introduce yourself warmly — share your name, role, and key capabilities',
+        );
+        truncatedSections.push('- Show genuine curiosity about other team members');
+        truncatedSections.push('- Establish rapport before diving into the topic');
+        truncatedSections.push('- Be friendly, open, and collaborative');
+        truncatedSections.push('- Briefly mention what you can contribute to the team');
+      }
       // Re-add session continuity (already capped at ~2000 chars)
       if (metadata.sessionContinuity) {
         truncatedSections.push('');
@@ -253,10 +285,14 @@ export function buildArenaGreeting(metadata: ArenaMetadata): string {
   const firstName = metadata.agents[0]?.name ?? 'Agent';
   const topic = metadata.topic;
   const hasContinuity = !!metadata.sessionContinuity;
+  const isFirstMeeting = !!metadata.isFirstTeamMeeting;
 
   if (metadata.participationMode === 'agent_only' && topic) {
     if (hasContinuity) {
       return `Continue the discussion on '${topic}'. Start as [${firstName}] and briefly reference what was discussed previously — decisions made, unresolved points — then advance the conversation.`;
+    }
+    if (isFirstMeeting) {
+      return `This is the team's very first meeting! Start as [${firstName}] and introduce yourself to the team. Share your name, role, and what you bring to the group. Then acknowledge the topic "${topic}" and invite the next member to introduce themselves before diving in.`;
     }
     return `Begin the discussion on the topic: "${topic}". Start as [${firstName}] and introduce the topic, then continue the conversation by alternating between personas.`;
   }
@@ -265,7 +301,14 @@ export function buildArenaGreeting(metadata: ArenaMetadata): string {
     if (hasContinuity) {
       return `Greet the user as [${firstName}]. Briefly recap the key points from the previous session on '${topic}' and ask what aspect they'd like to explore or continue with.`;
     }
+    if (isFirstMeeting) {
+      return `Welcome the user as [${firstName}] to the team's first meeting! Introduce yourself warmly — share your name, role, and what you can contribute. Then mention the topic "${topic}" and invite everyone to get to know each other.`;
+    }
     return `Greet the user as [${firstName}] and introduce the discussion topic: "${topic}". Invite the user to join the conversation.`;
+  }
+
+  if (isFirstMeeting) {
+    return `Welcome to the team's first meeting! Start as [${firstName}] and introduce yourself warmly. Ask each team member to share about themselves before deciding what to discuss.`;
   }
 
   return `Greet the user as [${firstName}] and ask what they would like to discuss.`;

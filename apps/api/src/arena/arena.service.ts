@@ -158,6 +158,27 @@ export class ArenaService {
     };
   }
 
+  async deleteSession(id: string): Promise<void> {
+    const sessionRows = await db
+      .select()
+      .from(arenaSessions)
+      .where(eq(arenaSessions.id, id));
+
+    if (sessionRows.length === 0) {
+      throw new NotFoundException(`Arena session ${id} not found`);
+    }
+
+    // Clean up ephemeral in-memory data
+    const participants = await this.getSessionParticipantRows(id);
+    for (const p of participants) {
+      this.participantExtras.delete(p.id);
+    }
+    this.invalidateCache(id);
+
+    // Delete session — participants, transcripts, briefs cascade; memories set null
+    await db.delete(arenaSessions).where(eq(arenaSessions.id, id));
+  }
+
   async getSession(id: string): Promise<ArenaSession> {
     const cached = this.getCached(id);
     if (cached) return cached;

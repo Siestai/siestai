@@ -96,6 +96,7 @@ export class LivekitService {
     agentToolDefs?: Map<string, { slug: string; name: string; description: string }[]>,
     sessionContinuity?: string,
     agentTeamNames?: Map<string, string[]>,
+    isFirstTeamMeeting?: boolean,
   ): Promise<{ token: string; serverUrl: string; roomName: string }> {
     if (!this.apiKey || !this.apiSecret || !this.livekitUrl) {
       throw new InternalServerErrorException('LiveKit not configured');
@@ -134,6 +135,7 @@ export class LivekitService {
       backendUrl,
       ...(toolSecret && { toolSecret }),
       ...(sessionContinuity && { sessionContinuity }),
+      ...(isFirstTeamMeeting && { isFirstTeamMeeting: true }),
     });
 
     if (Buffer.byteLength(metadata, 'utf8') > 60 * 1024) {

@@ -2,6 +2,7 @@
 
 import { use, useState, useEffect, useRef } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   ChevronLeft,
   Loader2,
@@ -11,14 +12,25 @@ import {
   Eye,
   Mic,
   Brain,
+  Trash2,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import {
   getArenaSession,
   getArenaSessionTranscripts,
   getArenaSessionBrief,
   getArenaSessionMemories,
+  deleteArenaSession,
 } from "@/lib/arena-api";
 import { ArenaBriefContent } from "@/components/arena/arena-brief-content";
 import type {
@@ -61,10 +73,13 @@ export default function ArenaHistoryDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = use(params);
+  const router = useRouter();
   const [session, setSession] = useState<ArenaSession | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>("overview");
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   // Lazy-loaded tab data
   const [transcripts, setTranscripts] = useState<ArenaTranscriptEntry[] | null>(null);
@@ -131,6 +146,16 @@ export default function ArenaHistoryDetailPage({
     } catch {
       setBriefLoading(false);
       setBriefProcessing(false);
+    }
+  }
+
+  async function handleDelete() {
+    setDeleteLoading(true);
+    try {
+      await deleteArenaSession(id);
+      router.push("/arena?tab=history");
+    } finally {
+      setDeleteLoading(false);
     }
   }
 
@@ -226,12 +251,23 @@ export default function ArenaHistoryDetailPage({
           <ChevronLeft className="h-4 w-4" />
           Arena
         </Link>
-        <h1 className="text-2xl font-semibold text-foreground">
-          {session.topic || "Untitled Session"}
-        </h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          {formatDate(session.createdAt)}
-        </p>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-semibold text-foreground">
+              {session.topic || "Untitled Session"}
+            </h1>
+            <p className="text-sm text-muted-foreground mt-1">
+              {formatDate(session.createdAt)}
+            </p>
+          </div>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setShowDeleteConfirm(true)}
+          >
+            <Trash2 className="h-4 w-4 text-destructive" />
+          </Button>
+        </div>
       </div>
 
       {/* Tab bar */}
@@ -517,6 +553,34 @@ export default function ArenaHistoryDetailPage({
           )}
         </div>
       )}
+      {/* Delete confirmation dialog */}
+      <Dialog open={showDeleteConfirm} onOpenChange={(open) => !open && setShowDeleteConfirm(false)}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Delete Session</DialogTitle>
+            <DialogDescription>
+              This will permanently delete this session, its transcript, brief, and associated data. This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setShowDeleteConfirm(false)}
+              disabled={deleteLoading}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDelete}
+              disabled={deleteLoading}
+            >
+              {deleteLoading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

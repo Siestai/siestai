@@ -15,9 +15,18 @@ import {
   Brain,
   Calendar,
   Search,
+  Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { useAgentEditor } from "@/hooks/use-agent-editor";
 import { AgentHeader } from "@/components/agents/detail/agent-header";
 import { ModelSection } from "@/components/agents/detail/model-section";
@@ -58,6 +67,10 @@ export default function AgentDetailPage({
   // Daily tab
   const [dailyFiles, setDailyFiles] = useState<DailyMemoryFile[]>([]);
   const [dailyLoading, setDailyLoading] = useState(false);
+
+  // Delete
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   useEffect(() => {
     api.listAgentFiles(id).then(setUploadedFiles).catch(() => {});
@@ -110,6 +123,16 @@ export default function AgentDetailPage({
     }
   }
 
+  async function handleDeleteAgent() {
+    setDeleteLoading(true);
+    try {
+      await api.deleteAgent(id);
+      router.push("/agents");
+    } finally {
+      setDeleteLoading(false);
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-32">
@@ -150,6 +173,13 @@ export default function AgentDetailPage({
             Agents
           </Link>
           <div className="flex gap-2">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setShowDeleteConfirm(true)}
+            >
+              <Trash2 className="h-4 w-4 text-destructive" />
+            </Button>
             <Button
               variant="outline"
               size="sm"
@@ -394,6 +424,35 @@ export default function AgentDetailPage({
           onClose={() => setChatOpen(false)}
         />
       </aside>
+
+      {/* Delete confirmation dialog */}
+      <Dialog open={showDeleteConfirm} onOpenChange={(open) => !open && setShowDeleteConfirm(false)}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Delete Agent</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete <strong>{agent.name}</strong>? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setShowDeleteConfirm(false)}
+              disabled={deleteLoading}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDeleteAgent}
+              disabled={deleteLoading}
+            >
+              {deleteLoading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
